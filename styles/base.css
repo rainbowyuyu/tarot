@@ -1,0 +1,20 @@
+/* --- 全局基础样式 --- */
+:root {
+    --primary: #d4af37; /* 金色 */
+    --bg: #050505;
+    --glass: rgba(20, 20, 20, 0.85);
+}
+
+body, html {
+    margin: 0; padding: 0; overflow: hidden;
+    background-color: var(--bg);
+    font-family: "Cinzel", "Segoe UI", serif;
+    color: #eee;
+    user-select: none;
+}
+
+/* 3D 渲染容器 */
+#canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+/* 视频流隐藏（仅用于分析） */
+#input_video { position: absolute; transform: scaleX(-1); opacity: 0; pointer-events: none; }

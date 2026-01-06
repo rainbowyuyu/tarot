@@ -1,6 +1,6 @@
 import { CONFIG, STATE } from './globals.js';
 import { ui } from './ui.js';
-import { scene, camera, renderer, deckGroup, cards, reticle, pointLight, starField, initDeck, getCardFrontMaterial } from './scene.js';
+import { scene, camera, renderer, deckGroup, cards, reticle, pointLight, starField, initDeck, getCardFrontMaterial, createCardCanvas } from './scene.js';
 import { fetchInterpretation } from './api.js';
 
 const raycaster = new THREE.Raycaster();
@@ -36,9 +36,9 @@ function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
 
 // --- 游戏逻辑 ---
 
-function confirmSelection(card) {
+function confirmSelection(cardGroup) {
     if (STATE.selectedCards.length >= 3) return;
-    if (STATE.selectedCards.find(c => c.mesh === card)) return;
+    if (STATE.selectedCards.find(c => c.mesh === cardGroup)) return;
 
     STATE.cooldown = CONFIG.cooldownTime;
     STATE.isPinching = false;
@@ -46,24 +46,24 @@ function confirmSelection(card) {
 
     const isReversed = Math.random() > 0.5;
     const cardInfo = {
-        mesh: card,
-        name: card.userData.name,
+        mesh: cardGroup,
+        name: cardGroup.userData.name,
         orientation: isReversed ? "逆位" : "正位"
     };
     STATE.selectedCards.push(cardInfo);
 
     const worldPos = new THREE.Vector3();
-    card.getWorldPosition(worldPos);
+    cardGroup.getWorldPosition(worldPos);
     const worldRot = new THREE.Quaternion();
-    card.getWorldQuaternion(worldRot);
+    cardGroup.getWorldQuaternion(worldRot);
 
-    deckGroup.remove(card);
-    scene.add(card);
+    deckGroup.remove(cardGroup);
+    scene.add(cardGroup);
 
-    card.position.copy(worldPos);
-    card.quaternion.copy(worldRot);
+    cardGroup.position.copy(worldPos);
+    cardGroup.quaternion.copy(worldRot);
     const euler = new THREE.Euler().setFromQuaternion(worldRot);
-    card.rotation.copy(euler);
+    cardGroup.rotation.copy(euler);
 
     // 底部等待位置
     const slotIndex = STATE.selectedCards.length - 1;
@@ -71,16 +71,20 @@ function confirmSelection(card) {
     const targetY = -2.5;
     const targetZ = 9;
 
-    card.material[4].emissive.setHex(0xffaa00);
+    cardGroup.children[0].material.emissive.setHex(0xffaa00);
+    cardGroup.children[0].material.emissiveIntensity = 1.0;
 
-    animateMove(card,
+    animateMove(cardGroup,
         {x: targetX, y: targetY, z: targetZ},
         {x: 0, y: 0, z: 0},
         {x: 0.8, y: 0.8, z: 0.8},
         600
     );
 
-    setTimeout(() => { card.material[4].emissive.setHex(0x111111); }, 300);
+    setTimeout(() => {
+        cardGroup.children[0].material.emissive.setHex(0x221100);
+        cardGroup.children[0].material.emissiveIntensity = 0.2;
+    }, 300);
 
     if (STATE.selectedCards.length === 3) {
         STATE.phase = 'revealing';
@@ -98,8 +102,9 @@ function revealCards() {
     STATE.selectedCards.forEach((c, index) => {
         setTimeout(() => {
             const newMaterial = getCardFrontMaterial(c.name);
-            c.mesh.material[5] = newMaterial;
-            c.mesh.material[5].needsUpdate = true;
+            const frontMesh = c.mesh.children[2];
+            frontMesh.material = newMaterial;
+            frontMesh.material.needsUpdate = true;
 
             const revealX = (index - 1) * 3.5;
             const revealY = 0.5;
@@ -121,11 +126,41 @@ function revealCards() {
     setTimeout(showResultPanel, 3500);
 }
 
+// --- 核心修改：在结果面板显示卡牌预览图 ---
 function showResultPanel() {
     ui.result.style.opacity = 1;
     ui.result.style.pointerEvents = "auto";
     ui.aiText.innerHTML = "正在连接星灵...";
+
+    // 清空现有内容
     ui.revealCont.innerHTML = "";
+
+    // 遍历选中的卡牌生成预览
+    STATE.selectedCards.forEach(c => {
+        const cardContainer = document.createElement('div');
+        cardContainer.className = 'ui-card-wrapper';
+
+        // 1. 生成 Canvas 图片
+        const cardCanvas = createCardCanvas(c.name);
+        const img = document.createElement('img');
+        img.src = cardCanvas.toDataURL();
+        img.className = 'ui-card-img';
+
+        // 2. 如果是逆位，在 UI 上旋转图片
+        if (c.orientation === "逆位") {
+            img.style.transform = "rotate(180deg)";
+        }
+
+        // 3. 标签
+        const label = document.createElement('div');
+        label.className = 'ui-card-label';
+        label.innerText = `${c.name.split('(')[0]} (${c.orientation})`;
+
+        cardContainer.appendChild(img);
+        cardContainer.appendChild(label);
+        ui.revealCont.appendChild(cardContainer);
+    });
+
     fetchInterpretation();
 }
 
@@ -133,8 +168,8 @@ function resetGame() {
     STATE.phase = 'intro';
     STATE.selectedCards.forEach(c => {
         scene.remove(c.mesh);
-        if(c.mesh.material[5].map) c.mesh.material[5].map.dispose();
-        if(c.mesh.material[5]) c.mesh.material[5].dispose();
+        if(c.mesh.children[2].material.map) c.mesh.children[2].material.map.dispose();
+        if(c.mesh.children[2].material) c.mesh.children[2].material.dispose();
     });
     STATE.selectedCards = [];
     STATE.isPinching = false;
@@ -161,66 +196,60 @@ function updatePhysics() {
         STATE.cooldown -= 16;
     }
 
-    // --- 核心优化：旋转与水平并存的选牌逻辑 ---
     if (STATE.phase === 'selecting') {
-        // 牌堆的水平平移 (基于手势 X)
         const targetDeckPosX = -STATE.handPos.x * 75;
         deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * 0.08;
 
-        // 牌堆的绕Y轴旋转 (基于手势 X)
         const targetDeckRotY = -STATE.handPos.x * 2.0;
         deckGroup.rotation.y += (targetDeckRotY - deckGroup.rotation.y) * 0.08;
 
-        // 垂直方向轻微跟随 (基于手势 Y)
         const targetDeckPosY = -STATE.handPos.y * 3;
         deckGroup.position.y += (targetDeckPosY - deckGroup.position.y) * 0.1;
 
-        // 牌堆的轻微 Z 轴倾斜，增加立体感
         deckGroup.rotation.z += (STATE.handPos.x * 0.1 - deckGroup.rotation.z) * 0.05;
     }
 
-    // 准星逻辑
-    const vector = new THREE.Vector3(STATE.handPos.x * 2.2, STATE.handPos.y * 2.2, 0.5);
+    const sensitivity = 2.5;
+    const ndcX = Math.max(-1, Math.min(1, STATE.handPos.x * sensitivity));
+    const ndcY = Math.max(-1, Math.min(1, STATE.handPos.y * sensitivity));
+
+    const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
     vector.unproject(camera);
     const dir = vector.sub(camera.position).normalize();
     const targetPos = camera.position.clone().add(dir.multiplyScalar(10));
-    reticle.position.lerp(targetPos, 0.3);
+    reticle.position.lerp(targetPos, 0.4);
 
     pointLight.position.copy(reticle.position);
     pointLight.position.z += 1;
 
-    // 射线检测
-    raycaster.setFromCamera({ x: STATE.handPos.x * 2, y: STATE.handPos.y * 2 }, camera);
-    const intersects = raycaster.intersectObjects(deckGroup.children);
+    raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+
+    const intersects = raycaster.intersectObjects(deckGroup.children, true);
 
     let hoveredCard = null;
     if (intersects.length > 0 && STATE.phase === 'selecting' && STATE.cooldown <= 0) {
-        hoveredCard = intersects[0].object;
+        const hitObj = intersects[0].object;
+        if (hitObj.parent && hitObj.parent.userData.isCardGroup) {
+            hoveredCard = hitObj.parent;
+        }
     }
 
-    // --- 角度计算核心 ---
-    // 1. 绝对正对屏幕的角度：完全抵消 deckGroup 的旋转
     const absoluteFaceCameraRot = -deckGroup.rotation.y;
 
     deckGroup.children.forEach(c => {
         const isCurrentlyHovered = (c === hoveredCard);
+        const coreMesh = c.children[0];
 
         if (isCurrentlyHovered) {
-            // [高亮状态]
-            // 颜色变亮
-            c.material[4].emissive.setHex(0x5544aa);
-            c.material[4].emissiveIntensity = 0.8;
+            coreMesh.material.emissive.setHex(0x5544aa);
+            coreMesh.material.emissiveIntensity = 0.8;
 
-            // 位置前突
             const hoverZ = c.userData.originalPos.z + 2.0;
             c.position.z = THREE.MathUtils.lerp(c.position.z, hoverZ, 0.2);
             c.scale.setScalar(1.2);
 
-            // 【关键】选中卡牌：严格使用 absoluteFaceCameraRot
-            // 无论牌堆怎么转，这张牌就像贴在屏幕玻璃上一样正对玩家
             c.rotation.y = THREE.MathUtils.lerp(c.rotation.y, absoluteFaceCameraRot, 0.2);
 
-            // 处理捏合逻辑
             if (STATE.isPinching) {
                 if (STATE.pinchStartTime === 0) STATE.pinchStartTime = Date.now();
                 const elapsed = (Date.now() - STATE.pinchStartTime) / 1000;
@@ -239,27 +268,20 @@ function updatePhysics() {
             }
 
         } else {
-            // [非高亮状态]
-            c.material[4].emissive.setHex(0x110022);
-            c.material[4].emissiveIntensity = 0.2;
+            coreMesh.material.emissive.setHex(0x221100);
+            coreMesh.material.emissiveIntensity = 0.2;
 
             const floatY = Math.sin(time * 2 + c.userData.id) * 0.03;
             c.position.z += (c.userData.originalPos.z - c.position.z) * 0.1;
             c.position.y += (c.userData.originalPos.y + floatY - c.position.y) * 0.1;
             c.position.x += (c.userData.originalPos.x - c.position.x) * 0.1;
-            c.scale.setScalar(1);
 
-            // 【关键】背景卡牌：保留轻微弧度
-            let targetRot;
-            if (STATE.phase === 'selecting') {
-                // (baseAngle * 0.15) 保留 15% 的原始扇形角度，制造微弱的弧形墙效果
-                // - deckGroup.rotation.y 抵消整体旋转，确保卡背始终大体朝向观众
-                targetRot = (c.userData.baseAngle * 0.15) - deckGroup.rotation.y;
-            } else {
-                // 非选牌阶段（如洗牌、展示），恢复原始扇形朝向
-                targetRot = c.userData.baseAngle;
+            const currentScale = c.scale.x;
+            if (Math.abs(currentScale - 1) > 0.01) {
+                 c.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
             }
 
+            let targetRot = (c.userData.baseAngle * 0.15) - deckGroup.rotation.y;
             c.rotation.y += (targetRot - c.rotation.y) * 0.1;
         }
     });
@@ -283,7 +305,14 @@ function isHandFist(landmarks) {
 
 const videoElement = document.getElementById('input_video');
 const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-hands.setOptions({maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5});
+// 优化：在移动端降低复杂度以提升性能
+const isMobile = window.innerWidth < 768;
+hands.setOptions({
+    maxNumHands: 2,
+    modelComplexity: isMobile ? 0 : 1, // 0: Lite, 1: Full
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+});
 
 hands.onResults((results) => {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -328,14 +357,21 @@ hands.onResults((results) => {
     }
 });
 
+// --- 核心修改：摄像头初始化支持移动端 ---
+// 添加 facingMode: 'user' 强制使用前置摄像头
 const cameraUtils = new Camera(videoElement, {
   onFrame: async () => { await hands.send({image: videoElement}); },
-  width: 640, height: 480
+  width: isMobile ? 480 : 640,  // 移动端降低分辨率
+  height: isMobile ? 640 : 480,
+  facingMode: 'user' // 关键：指定前置摄像头
 });
 
 ui.startBtn.addEventListener('click', () => {
     ui.loader.style.display = 'none';
-    cameraUtils.start();
+    cameraUtils.start().catch(err => {
+        console.error("摄像头启动失败:", err);
+        alert("无法访问摄像头，请确保已授权并在 HTTPS 环境下运行。");
+    });
 });
 
 window.onload = () => {

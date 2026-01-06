@@ -1,0 +1,59 @@
+/* --- 布局与导航样式 --- */
+
+/* UI 交互层容器 */
+#ui-layer {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 10; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between;
+}
+
+/* 顶部状态栏 */
+.status-bar {
+    padding: 20px; text-align: center;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+    pointer-events: none;
+}
+h1 { margin: 0; font-weight: 400; color: var(--primary); letter-spacing: 4px; font-size: 24px; text-shadow: 0 0 10px var(--primary); }
+.sub-text { font-size: 14px; opacity: 0.7; margin-top: 5px; letter-spacing: 1px; }
+
+/* 顶部控制按钮组 */
+.top-controls {
+    position: absolute; top: 20px; right: 20px;
+    display: flex; gap: 15px;
+    z-index: 100;
+}
+
+.top-controls button {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    font-size: 20px; font-family: serif;
+    cursor: pointer; pointer-events: auto;
+    transition: all 0.3s;
+    backdrop-filter: blur(5px);
+    display: flex; align-items: center; justify-content: center;
+}
+
+.top-controls button:hover {
+    background: var(--primary);
+    color: #000;
+    box-shadow: 0 0 15px var(--primary);
+    transform: rotate(90deg);
+}
+#help-btn:hover { transform: scale(1.1); }
+
+/* 底部 Footer */
+#site-footer {
+    position: absolute; bottom: 0; left: 0; width: 100%;
+    text-align: center; padding: 15px 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    color: #666; font-size: 12px;
+    pointer-events: auto;
+    z-index: 50;
+}
+#site-footer p { margin: 5px 0; }
+.beian-info { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.beian-info a { color: #888; text-decoration: none; transition: color 0.3s; }
+.beian-info a:hover { color: var(--primary); }

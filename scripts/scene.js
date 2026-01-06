@@ -10,7 +10,7 @@ camera.lookAt(0, 0, 0);
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制像素比以优化移动端性能
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
@@ -25,8 +25,8 @@ scene.add(ambientLight);
 const mainLight = new THREE.DirectionalLight(0xffeebb, 1.0);
 mainLight.position.set(5, 12, 18);
 mainLight.castShadow = true;
-mainLight.shadow.mapSize.width = 2048;
-mainLight.shadow.mapSize.height = 2048;
+mainLight.shadow.mapSize.width = 1024; // 稍微降低阴影分辨率优化性能
+mainLight.shadow.mapSize.height = 1024;
 mainLight.shadow.bias = -0.0001;
 scene.add(mainLight);
 
@@ -74,7 +74,8 @@ function createCardBackTexture() {
     ctx.fillStyle = deepPurple;
     ctx.fillRect(0, 0, width, height);
 
-    for (let i = 0; i < 40000; i++) {
+    // 减少粒子数量优化性能
+    for (let i = 0; i < 10000; i++) {
         ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.04})`;
         const x = Math.random() * width;
         const y = Math.random() * height;
@@ -109,8 +110,8 @@ function createCardBackTexture() {
     ctx.strokeStyle = `rgba(212, 175, 55, 0.3)`;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for(let i=0; i<72; i++) {
-        const angle = (Math.PI * 2 / 72) * i;
+    for(let i=0; i<36; i++) { // 减少线条数量
+        const angle = (Math.PI * 2 / 36) * i;
         ctx.moveTo(cx + Math.cos(angle) * 100, cy + Math.sin(angle) * 100);
         ctx.lineTo(cx + Math.cos(angle) * 350, cy + Math.sin(angle) * 350);
     }
@@ -119,6 +120,7 @@ function createCardBackTexture() {
     ctx.strokeStyle = goldColor;
     ctx.lineWidth = 3;
     drawStar(cx, cy, 180, 140, 12);
+
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(Math.PI / 12);
@@ -133,7 +135,7 @@ function createCardBackTexture() {
     ctx.fillStyle = goldColor;
     ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI*2); ctx.fill();
 
-    function drawCrescent(x, y, r, rot) {
+        function drawCrescent(x, y, r, rot) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(rot);
@@ -153,19 +155,27 @@ function createCardBackTexture() {
 }
 
 // --- 材质定义 ---
-const cardSideMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
 const proceduralBackTex = createCardBackTexture();
+
+
 const cardBackMat = new THREE.MeshStandardMaterial({
     map: proceduralBackTex,
     color: 0xffffff,
     roughness: 0.4,
-    metalness: 0.7,
-    emissive: 0x220033,
-    emissiveIntensity: 0.3
+    metalness: 0.6,
 });
+
+const cardBodyMat = new THREE.MeshStandardMaterial({
+    color: 0xccaa44,
+    roughness: 0.2,
+    metalness: 0.9,
+    emissive: 0x221100,
+    emissiveIntensity: 0.2
+});
+
 const cardFrontBaseMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.6,
+    color: 0x111111,
+    roughness: 0.5,
     metalness: 0.1
 });
 
@@ -173,37 +183,44 @@ export const cards = [];
 export const deckGroup = new THREE.Group();
 scene.add(deckGroup);
 
-// --- 3. 动态生成卡面纹理 ---
-export function getCardFrontMaterial(name) {
+// --- 3. 核心修改：独立的 Canvas 生成函数 (UI 和 3D 共用) ---
+export function createCardCanvas(name) {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 900;
     const ctx = canvas.getContext('2d');
 
+    // 绘制卡面背景
     ctx.fillStyle = '#f5e6d3';
     ctx.fillRect(0, 0, 512, 900);
-    for(let i=0; i<4000; i++) {
+
+    // 噪点
+    for(let i=0; i<2000; i++) {
         ctx.fillStyle = `rgba(0,0,0,${Math.random()*0.06})`;
         ctx.fillRect(Math.random()*512, Math.random()*900, 2, 2);
     }
 
+    // 边框
     ctx.strokeStyle = '#cba135';
     ctx.lineWidth = 18;
     drawRoundedRect(ctx, 15, 15, 482, 870, 20);
     ctx.lineWidth = 4;
     drawRoundedRect(ctx, 30, 30, 452, 840, 10);
 
+    // 内容框
     ctx.fillStyle = '#f0eadd';
     ctx.fillRect(50, 50, 412, 580);
     ctx.strokeStyle = '#aa9977';
     ctx.lineWidth = 1;
     ctx.strokeRect(50, 50, 412, 580);
 
+    // 绘制图案
     const id = TAROT_DATA.indexOf(name);
     if (id !== -1) {
         drawArcanaSymbol(ctx, 256, 340, id);
     }
 
+    // 文字
     ctx.fillStyle = '#111';
     ctx.font = 'bold 38px "Cinzel", serif';
     ctx.textAlign = 'center';
@@ -217,9 +234,14 @@ export function getCardFrontMaterial(name) {
     ctx.fillStyle = '#555';
     ctx.fillText(enName, 256, 740);
 
+    return canvas;
+}
+
+// 动态生成卡面材质 (调用上面的函数)
+export function getCardFrontMaterial(name) {
+    const canvas = createCardCanvas(name);
     const tex = new THREE.CanvasTexture(canvas);
     tex.encoding = THREE.sRGBEncoding;
-    tex.needsUpdate = true;
 
     return new THREE.MeshStandardMaterial({
         map: tex,
@@ -228,6 +250,48 @@ export function getCardFrontMaterial(name) {
     });
 }
 
+// --- 高级几何体生成 ---
+const sharedGeometries = (function() {
+    const width = CONFIG.cardWidth;
+    const height = CONFIG.cardHeight;
+    const radius = 0.15;
+    const thickness = 0.04;
+
+    const shape = new THREE.Shape();
+    const x = -width / 2;
+    const y = -height / 2;
+
+    shape.moveTo(x + radius, y);
+    shape.lineTo(x + width - radius, y);
+    shape.quadraticCurveTo(x + width, y, x + width, y + radius);
+    shape.lineTo(x + width, y + height - radius);
+    shape.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    shape.lineTo(x + radius, y + height);
+    shape.quadraticCurveTo(x, y + height, x, y + height - radius);
+    shape.lineTo(x, y + radius);
+    shape.quadraticCurveTo(x, y, x + radius, y);
+
+    const extrudeSettings = { steps: 1, depth: thickness, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3 };
+    const coreGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    coreGeo.center();
+
+    const faceGeo = new THREE.ShapeGeometry(shape);
+    faceGeo.center();
+
+    const posAttribute = faceGeo.attributes.position;
+    const uvAttribute = faceGeo.attributes.uv;
+    for (let i = 0; i < posAttribute.count; i++) {
+        const x = posAttribute.getX(i);
+        const y = posAttribute.getY(i);
+        const u = (x + width / 2) / width;
+        const v = (y + height / 2) / height;
+        uvAttribute.setXY(i, u, v);
+    }
+    faceGeo.attributes.uv.needsUpdate = true;
+
+    return { coreGeo, faceGeo, thickness, bevelThickness: 0.02 };
+})();
+
 export function initDeck() {
     while(deckGroup.children.length > 0){
         deckGroup.remove(deckGroup.children[0]);
@@ -235,58 +299,62 @@ export function initDeck() {
     cards.length = 0;
 
     for (let i = 0; i < CONFIG.cardCount; i++) {
-        const geometry = new THREE.BoxGeometry(CONFIG.cardWidth, CONFIG.cardHeight, 0.04);
+        const group = new THREE.Group();
 
-        const materials = [
-            cardSideMat, cardSideMat, cardSideMat, cardSideMat,
-            cardBackMat, // +Z
-            cardFrontBaseMat // -Z
-        ];
+        const coreMesh = new THREE.Mesh(sharedGeometries.coreGeo, cardBodyMat.clone());
+        coreMesh.castShadow = true;
+        coreMesh.receiveShadow = true;
+        group.add(coreMesh);
 
-        const mesh = new THREE.Mesh(geometry, materials);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        const zOffset = (sharedGeometries.thickness / 2) + sharedGeometries.bevelThickness + 0.001;
 
-        // 【优化】更散开的排列
-        const angleStep = 0.20; // 适当的角度间隔
+        const backMesh = new THREE.Mesh(sharedGeometries.faceGeo, cardBackMat);
+        backMesh.position.z = zOffset;
+        backMesh.receiveShadow = true;
+        group.add(backMesh);
+
+        const frontMesh = new THREE.Mesh(sharedGeometries.faceGeo, cardFrontBaseMat);
+        frontMesh.position.z = -zOffset;
+        frontMesh.rotation.y = Math.PI;
+        frontMesh.receiveShadow = true;
+        group.add(frontMesh);
+
+        const angleStep = 0.20;
         const angle = (i - CONFIG.cardCount/2) * angleStep;
-
-        // 使用较大的半径，让弧线更宽
         const radius = CONFIG.deckRadius;
 
-        mesh.position.set(
+        group.position.set(
             Math.sin(angle) * radius,
-            Math.cos(angle * 2) * 0.5 - 0.5, // 垂直方向轻微起伏
+            Math.cos(angle * 2) * 0.5 - 0.5,
             Math.cos(angle) * radius - radius
         );
 
-        // 初始旋转：默认面向圆心
-        mesh.rotation.y = -angle;
-        mesh.rotation.z = (Math.random() - 0.5) * 0.02; // 极微小的随机扰动
+        group.rotation.y = -angle;
+        group.rotation.z = (Math.random() - 0.5) * 0.02;
 
-        mesh.userData = {
+        group.userData = {
             id: i,
             name: TAROT_DATA[i],
-            baseAngle: -angle, // 记录原始角度用于后续计算
-            originalPos: mesh.position.clone(),
-            originalRot: mesh.rotation.clone(),
-            isHovered: false
+            baseAngle: -angle,
+            originalPos: group.position.clone(),
+            originalRot: group.rotation.clone(),
+            isHovered: false,
+            isCardGroup: true
         };
 
-        deckGroup.add(mesh);
-        cards.push(mesh);
+        deckGroup.add(group);
+        cards.push(group);
     }
 }
 initDeck();
 
-// 辅助图形
 const reticleGeo = new THREE.RingGeometry(0.12, 0.16, 32);
 const reticleMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
 export const reticle = new THREE.Mesh(reticleGeo, reticleMat);
 scene.add(reticle);
 
 const starGeo = new THREE.BufferGeometry();
-const starCount = 1500;
+const starCount = 1000; // 降低粒子数优化移动端
 const posArray = new Float32Array(starCount * 3);
 for(let i=0; i<starCount*3; i++) {
     posArray[i] = (Math.random() - 0.5) * 60;

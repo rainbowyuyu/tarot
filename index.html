@@ -5,8 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>塔罗牌预测系统</title>
 
-    <!-- 引入自定义样式 -->
-    <link rel="stylesheet" href="styles/style.css">
+    <!-- 引入自定义样式 (模块化) -->
+    <link rel="stylesheet" href="styles/base.css">
+    <link rel="stylesheet" href="styles/layout.css">
+    <link rel="stylesheet" href="styles/loading.css">
+    <link rel="stylesheet" href="styles/guide.css">
+    <link rel="stylesheet" href="styles/modals.css">
+    <link rel="stylesheet" href="styles/results.css">
 
     <!-- 引入外部库 (Three.js, MediaPipe, Marked) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -31,6 +36,13 @@
 
     <!-- UI 交互层 -->
     <div id="ui-layer">
+
+        <!-- 顶部按钮组 (帮助 & 设置) -->
+        <div class="top-controls">
+            <button id="settings-btn" title="系统设置">⚙️</button>
+            <button id="help-btn" title="操作指南">?</button>
+        </div>
+
         <div class="status-bar">
             <h1>ARCANA GESTURA</h1>
             <div class="sub-text">手势驱动 · 塔罗预测系统</div>
@@ -59,20 +71,29 @@
             </div>
         </div>
 
-        <!-- API Key 输入区 -->
-        <div id="settings-area">
-            <input type="password" id="api-key-input" placeholder="输入阿里云 Qwen API Key">
+        <!-- 设置模态框 (原 API Key 输入区移至此处) -->
+        <div id="settings-modal" class="modal-backdrop">
+            <div class="modal-content">
+                <span id="close-settings" class="close-modal">&times;</span>
+                <h2>系统设置</h2>
+
+                <div class="setting-item">
+                    <label for="api-key-input">AI 模型密钥 (Aliyun Qwen)</label>
+                    <p class="setting-desc">输入 Key 以启用深度解牌功能，留空则使用模拟数据。</p>
+                    <input type="password" id="api-key-input" placeholder="sk-xxxxxxxxxxxxxxxx">
+                </div>
+
+                <div class="setting-item">
+                    <label>关于我们</label>
+                    <p class="setting-desc">Arcana Gestura v1.0.0 - 基于 WebGazer 与 Three.js 构建。 &copy; rainbow_yu</p>
+                </div>
+            </div>
         </div>
 
-        <!-- ... 在 settings-area 之后 ... -->
-
-        <!-- 帮助按钮 -->
-        <button id="help-btn">?</button>
-
         <!-- 帮助模态框 -->
-        <div id="help-modal">
+        <div id="help-modal" class="modal-backdrop">
             <div class="modal-content">
-                <span id="close-help">&times;</span>
+                <span id="close-help" class="close-modal">&times;</span>
                 <h2>操作指南</h2>
                 <div class="help-item">
                     <span class="icon">👋</span>
@@ -95,22 +116,72 @@
                         <p>在解牌结束后，<b>握拳</b>并保持 1.5 秒，即可重新开始。</p>
                     </div>
                 </div>
-                <div class="help-item">
-                    <span class="icon">⚙️</span>
-                    <div>
-                        <h3>AI 设置</h3>
-                        <p>在左下角输入阿里云 API Key 可获得 AI 详细解读，否则为模拟数据。</p>
-                    </div>
+            </div>
+        </div>
+
+        <!-- 右下角手势提示 -->
+        <div id="gesture-hint">
+            <p>🤏 捏合：选牌</p>
+            <p>🤛 握拳：重置</p>
+        </div>
+
+        <!-- 底部版权栏 -->
+        <footer id="site-footer">
+            <p class="beian-info">
+                <span>&copy; 2026 rainbow_yu. All Rights Reserved.</span> |
+                <span>沪ICP备2025156088号-1</span> |
+<!--                <span>京公网安备 11010000000000号</span> |-->
+                <a href="#" id="privacy-link">隐私协议</a> | <a href="#" id="tos-link">服务条款</a>
+            </p>
+        </footer>
+
+         <!-- 隐私协议模态框 -->
+        <div id="privacy-modal" class="modal-backdrop">
+            <div class="modal-content large-modal">
+                <span id="close-privacy" class="close-modal">&times;</span>
+                <h2>隐私政策</h2>
+                <div class="legal-text">
+                    <h3>1. 数据收集与摄像头使用</h3>
+                    <p>ARCANA GESTURA 重视您的隐私。本应用使用 Google MediaPipe 技术进行手势识别。</p>
+                    <p><strong>关键声明：所有的摄像头视频流数据仅在您的本地设备（浏览器客户端）进行实时处理。我们绝不会将您的面部、手部图像或任何视频数据上传至云端服务器，也不会进行任何形式的存储或录制。</strong></p>
+
+                    <h3>2. API 密钥存储</h3>
+                    <p>如果您选择输入阿里云 Qwen API Key，该密钥将仅存储在您浏览器的本地存储（LocalStorage）中。该密钥仅用于向阿里云发起解牌请求，不会被发送至 ARCANA GESTURA 的服务器，也不会分享给第三方。</p>
+
+                    <h3>3. AI 服务交互</h3>
+                    <p>当您进行解牌时，系统会将您抽取的牌面信息（牌名、正逆位）发送至阿里云大模型进行文本生成。此过程遵循阿里云的隐私政策。我们不会发送您的个人身份信息。</p>
+
+                    <h3>4. Cookie 与本地存储</h3>
+                    <p>我们仅使用必要的本地存储功能来保存您的 API Key 设置（如您已输入），以便您下次访问时无需重复输入。</p>
                 </div>
             </div>
         </div>
 
-        <!-- 右下角手势提示 (保持不变或稍微精简) -->
-        <div id="gesture-hint">
-            <p>🤏 捏合：选牌</p>
-            <p>🤛 握拳：重置</p>
+        <!-- 服务条款模态框 -->
+        <div id="tos-modal" class="modal-backdrop">
+            <div class="modal-content large-modal">
+                <span id="close-tos" class="close-modal">&times;</span>
+                <h2>服务条款</h2>
+                <div class="legal-text">
+                    <h3>1. 服务性质：仅供娱乐</h3>
+                    <p>ARCANA GESTURA 是一个基于 WebGL 和 AI 技术的互动展示项目。<strong>本系统提供的所有塔罗牌解读、命运指引及 AI 生成的文本仅供娱乐、艺术欣赏及心理探索用途。</strong></p>
+                    <p>本服务不构成任何形式的心理咨询、法律建议、医疗建议或财务指导。请勿依据本服务的解读做出重大人生决策。</p>
 
+                    <h3>2. 用户行为规范</h3>
+                    <p>您同意不利用本服务进行任何非法活动。您输入 API Key 时，必须使用您合法拥有的密钥。严禁试图通过逆向工程、攻击或滥用接口来干扰系统的正常运行。</p>
+
+                    <h3>3. 免责声明</h3>
+                    <p>本服务按“现状”提供，不包含任何形式的明示或暗示保证。开发者不对 AI 生成内容的准确性、可靠性或完整性负责。由于网络延迟、API 服务中断或设备兼容性问题导致的服务不可用，开发者不承担赔偿责任。</p>
+
+                    <h3>4. 知识产权</h3>
+                    <p>本网站的视觉设计、3D 场景交互逻辑及代码架构归开发者所有。您可以出于个人非商业目的使用本服务。</p>
+
+                    <h3>5. 条款修改</h3>
+                    <p>我们保留随时修改本条款的权利。继续使用本服务即表示您接受修订后的条款。</p>
+                </div>
+            </div>
         </div>
+
     </div>
 
     <!-- 引入核心逻辑脚本 -->
