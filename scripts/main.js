@@ -97,10 +97,8 @@ function revealCards() {
 
     STATE.selectedCards.forEach((c, index) => {
         setTimeout(() => {
-            // 生成正面贴图
             const newMaterial = getCardFrontMaterial(c.name);
             c.mesh.material[5] = newMaterial;
-            // 强制材质更新
             c.mesh.material[5].needsUpdate = true;
 
             const revealX = (index - 1) * 3.5;
@@ -135,7 +133,6 @@ function resetGame() {
     STATE.phase = 'intro';
     STATE.selectedCards.forEach(c => {
         scene.remove(c.mesh);
-        // 释放内存：销毁动态生成的纹理
         if(c.mesh.material[5].map) c.mesh.material[5].map.dispose();
         if(c.mesh.material[5]) c.mesh.material[5].dispose();
     });
@@ -164,14 +161,25 @@ function updatePhysics() {
         STATE.cooldown -= 16;
     }
 
+    // --- 核心优化：旋转与水平并存的选牌逻辑 ---
     if (STATE.phase === 'selecting') {
-        const targetX = -STATE.handPos.x * 10;
-        const targetY = -STATE.handPos.y * 4;
-        deckGroup.position.x += (targetX - deckGroup.position.x) * 0.08;
-        deckGroup.rotation.z += (STATE.handPos.x * 0.2 - deckGroup.rotation.z) * 0.05;
-        deckGroup.position.y = Math.sin(time * 0.5) * 0.1;
+        // 牌堆的水平平移 (基于手势 X)
+        const targetDeckPosX = -STATE.handPos.x * 75;
+        deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * 0.08;
+
+        // 牌堆的绕Y轴旋转 (基于手势 X)
+        const targetDeckRotY = -STATE.handPos.x * 2.0;
+        deckGroup.rotation.y += (targetDeckRotY - deckGroup.rotation.y) * 0.08;
+
+        // 垂直方向轻微跟随 (基于手势 Y)
+        const targetDeckPosY = -STATE.handPos.y * 3;
+        deckGroup.position.y += (targetDeckPosY - deckGroup.position.y) * 0.1;
+
+        // 牌堆的轻微 Z 轴倾斜，增加立体感
+        deckGroup.rotation.z += (STATE.handPos.x * 0.1 - deckGroup.rotation.z) * 0.05;
     }
 
+    // 准星逻辑
     const vector = new THREE.Vector3(STATE.handPos.x * 2.2, STATE.handPos.y * 2.2, 0.5);
     vector.unproject(camera);
     const dir = vector.sub(camera.position).normalize();
@@ -181,42 +189,82 @@ function updatePhysics() {
     pointLight.position.copy(reticle.position);
     pointLight.position.z += 1;
 
+    // 射线检测
     raycaster.setFromCamera({ x: STATE.handPos.x * 2, y: STATE.handPos.y * 2 }, camera);
     const intersects = raycaster.intersectObjects(deckGroup.children);
 
+    let hoveredCard = null;
+    if (intersects.length > 0 && STATE.phase === 'selecting' && STATE.cooldown <= 0) {
+        hoveredCard = intersects[0].object;
+    }
+
+    // --- 角度计算核心 ---
+    // 1. 绝对正对屏幕的角度：完全抵消 deckGroup 的旋转
+    const absoluteFaceCameraRot = -deckGroup.rotation.y;
+
     deckGroup.children.forEach(c => {
-        const floatY = Math.sin(time * 1.5 + c.userData.id) * 0.05;
-        c.position.z += (c.userData.originalPos.z - c.position.z) * 0.1;
-        c.position.y += (c.userData.originalPos.y + floatY - c.position.y) * 0.1;
-        c.scale.setScalar(1);
-        c.material[4].emissive.setHex(0x111111);
+        const isCurrentlyHovered = (c === hoveredCard);
+
+        if (isCurrentlyHovered) {
+            // [高亮状态]
+            // 颜色变亮
+            c.material[4].emissive.setHex(0x5544aa);
+            c.material[4].emissiveIntensity = 0.8;
+
+            // 位置前突
+            const hoverZ = c.userData.originalPos.z + 2.0;
+            c.position.z = THREE.MathUtils.lerp(c.position.z, hoverZ, 0.2);
+            c.scale.setScalar(1.2);
+
+            // 【关键】选中卡牌：严格使用 absoluteFaceCameraRot
+            // 无论牌堆怎么转，这张牌就像贴在屏幕玻璃上一样正对玩家
+            c.rotation.y = THREE.MathUtils.lerp(c.rotation.y, absoluteFaceCameraRot, 0.2);
+
+            // 处理捏合逻辑
+            if (STATE.isPinching) {
+                if (STATE.pinchStartTime === 0) STATE.pinchStartTime = Date.now();
+                const elapsed = (Date.now() - STATE.pinchStartTime) / 1000;
+                const progress = Math.min(elapsed / CONFIG.selectionThreshold, 1.0);
+
+                ui.progCont.style.display = 'block';
+                ui.progress.style.width = `${progress * 100}%`;
+
+                c.position.x = c.userData.originalPos.x + (Math.random()-0.5) * 0.05;
+
+                if (progress >= 1.0) confirmSelection(c);
+            } else {
+                STATE.pinchStartTime = 0;
+                ui.progCont.style.display = 'none';
+                ui.progress.style.width = '0%';
+            }
+
+        } else {
+            // [非高亮状态]
+            c.material[4].emissive.setHex(0x110022);
+            c.material[4].emissiveIntensity = 0.2;
+
+            const floatY = Math.sin(time * 2 + c.userData.id) * 0.03;
+            c.position.z += (c.userData.originalPos.z - c.position.z) * 0.1;
+            c.position.y += (c.userData.originalPos.y + floatY - c.position.y) * 0.1;
+            c.position.x += (c.userData.originalPos.x - c.position.x) * 0.1;
+            c.scale.setScalar(1);
+
+            // 【关键】背景卡牌：保留轻微弧度
+            let targetRot;
+            if (STATE.phase === 'selecting') {
+                // (baseAngle * 0.15) 保留 15% 的原始扇形角度，制造微弱的弧形墙效果
+                // - deckGroup.rotation.y 抵消整体旋转，确保卡背始终大体朝向观众
+                targetRot = (c.userData.baseAngle * 0.15) - deckGroup.rotation.y;
+            } else {
+                // 非选牌阶段（如洗牌、展示），恢复原始扇形朝向
+                targetRot = c.userData.baseAngle;
+            }
+
+            c.rotation.y += (targetRot - c.rotation.y) * 0.1;
+        }
     });
 
-    if (intersects.length > 0 && STATE.phase === 'selecting' && STATE.cooldown <= 0) {
-        const hoveredCard = intersects[0].object;
-
-        const hoverZ = hoveredCard.userData.originalPos.z + 1.2;
-        hoveredCard.position.z = THREE.MathUtils.lerp(hoveredCard.position.z, hoverZ, 0.25);
-        hoveredCard.scale.setScalar(1.1);
-        hoveredCard.material[4].emissive.setHex(0x554422);
-
-        if (STATE.isPinching) {
-            if (STATE.pinchStartTime === 0) STATE.pinchStartTime = Date.now();
-            const elapsed = (Date.now() - STATE.pinchStartTime) / 1000;
-            const progress = Math.min(elapsed / CONFIG.selectionThreshold, 1.0);
-
-            ui.progCont.style.display = 'block';
-            ui.progress.style.width = `${progress * 100}%`;
-
-            hoveredCard.position.x += (Math.random()-0.5) * 0.05;
-
-            if (progress >= 1.0) confirmSelection(hoveredCard);
-        } else {
-            STATE.pinchStartTime = 0;
-            ui.progCont.style.display = 'none';
-            ui.progress.style.width = '0%';
-        }
-    } else {
+    if (!hoveredCard) {
         STATE.pinchStartTime = 0;
         ui.progCont.style.display = 'none';
     }

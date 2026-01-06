@@ -1,5 +1,5 @@
 import { CONFIG, TAROT_DATA } from './globals.js';
-import { drawArcanaSymbol } from './cardStyles.js'; // 确保文件名一致
+import { drawArcanaSymbol } from './cardStyles.js';
 
 export const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x050505, 0.012);
@@ -43,7 +43,7 @@ scene.add(bottomLight.target);
 export const pointLight = new THREE.PointLight(0xaa00ff, 1.2, 8);
 scene.add(pointLight);
 
-// --- 通用绘图辅助 ---
+// --- 辅助绘图函数 ---
 function drawRoundedRect(ctx, x, y, width, height, radius) {
     ctx.beginPath();
     ctx.moveTo(x + radius, y);
@@ -180,43 +180,30 @@ export function getCardFrontMaterial(name) {
     canvas.height = 900;
     const ctx = canvas.getContext('2d');
 
-    // 3.1 背景
     ctx.fillStyle = '#f5e6d3';
     ctx.fillRect(0, 0, 512, 900);
-    // 纸张噪点
     for(let i=0; i<4000; i++) {
         ctx.fillStyle = `rgba(0,0,0,${Math.random()*0.06})`;
         ctx.fillRect(Math.random()*512, Math.random()*900, 2, 2);
     }
 
-    // 3.2 边框
     ctx.strokeStyle = '#cba135';
     ctx.lineWidth = 18;
     drawRoundedRect(ctx, 15, 15, 482, 870, 20);
     ctx.lineWidth = 4;
     drawRoundedRect(ctx, 30, 30, 452, 840, 10);
 
-    // 3.3 图案区背景
     ctx.fillStyle = '#f0eadd';
     ctx.fillRect(50, 50, 412, 580);
     ctx.strokeStyle = '#aa9977';
     ctx.lineWidth = 1;
     ctx.strokeRect(50, 50, 412, 580);
 
-    // 3.4 【核心修复】获取 ID
-    // 之前用 parseInt 解析罗马数字会得到 NaN，导致 switch case 无法匹配
-    // 现在直接在原始数组中查找索引，保证 100% 准确
     const id = TAROT_DATA.indexOf(name);
-
     if (id !== -1) {
-        // 调用 cardStyles.js 中的绘制函数
-        // 坐标 (256, 340) 是上方矩形框的中心点 (50 + 412/2, 50 + 580/2)
         drawArcanaSymbol(ctx, 256, 340, id);
-    } else {
-        console.warn("Card ID not found for:", name);
     }
 
-    // 3.5 文字
     ctx.fillStyle = '#111';
     ctx.font = 'bold 38px "Cinzel", serif';
     ctx.textAlign = 'center';
@@ -260,21 +247,27 @@ export function initDeck() {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
-        const angle = (i - CONFIG.cardCount/2) * 0.18;
+        // 【优化】更散开的排列
+        const angleStep = 0.20; // 适当的角度间隔
+        const angle = (i - CONFIG.cardCount/2) * angleStep;
+
+        // 使用较大的半径，让弧线更宽
         const radius = CONFIG.deckRadius;
 
         mesh.position.set(
             Math.sin(angle) * radius,
-            Math.cos(angle * 2) * 0.5 - 0.5,
+            Math.cos(angle * 2) * 0.5 - 0.5, // 垂直方向轻微起伏
             Math.cos(angle) * radius - radius
         );
 
+        // 初始旋转：默认面向圆心
         mesh.rotation.y = -angle;
-        mesh.rotation.z = (Math.random() - 0.5) * 0.05;
+        mesh.rotation.z = (Math.random() - 0.5) * 0.02; // 极微小的随机扰动
 
         mesh.userData = {
             id: i,
             name: TAROT_DATA[i],
+            baseAngle: -angle, // 记录原始角度用于后续计算
             originalPos: mesh.position.clone(),
             originalRot: mesh.rotation.clone(),
             isHovered: false

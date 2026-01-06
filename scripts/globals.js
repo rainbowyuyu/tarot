@@ -5,7 +5,7 @@ export const CONFIG = {
     cardHeight: 4.6,
     selectionThreshold: 0.5, // 捏合确认时间
     cooldownTime: 1000,      // 冷却时间
-    deckRadius: 18,          // 牌堆半径
+    deckRadius: 30,          // 【优化】加大半径，让弧度更平缓，更像真实牌桌
     cameraSensX: 0.08,
     cameraSensY: 0.03,
     pinchDist: 0.06,         // 捏合触发距离
@@ -13,13 +13,10 @@ export const CONFIG = {
 };
 
 // 资源路径
-// 【修改】我们现在使用 Canvas 纯代码动态绘制卡牌（包括正面和背面），
-// 所以不再需要外部图片 URL。这里留空即可，或者后续可以放音效文件的路径。
-export const ASSETS = {
-    // 这里的旧链接已被弃用，系统现在是全本地渲染，无需网络图片
-};
+// 系统全本地渲染，无需外部链接
+export const ASSETS = {};
 
-// 塔罗牌数据 (22张大阿卡纳)
+// 塔罗牌数据
 export const TAROT_DATA = [
     "0. 愚者 (The Fool)", "I. 魔术师 (The Magician)", "II. 女祭司 (The High Priestess)",
     "III. 皇后 (The Empress)", "IV. 皇帝 (The Emperor)", "V. 教皇 (The Hierophant)",
@@ -39,9 +36,9 @@ export const STATE = {
     handPos: { x: 0, y: 0 },
     isPinching: false,
     pinchStartTime: 0,
-    selectedCards: [], // 存储已选卡牌信息
+    selectedCards: [],
     cooldown: 0,
     cameraOffset: { x: 0, y: 0 },
     apiKey: localStorage.getItem('qwen_api_key') || '',
-    fistHoldStart: 0   // 用于握拳重置计时
+    fistHoldStart: 0
 };
