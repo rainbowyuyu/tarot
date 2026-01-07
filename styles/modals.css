@@ -7,58 +7,67 @@
     justify-content: center; align-items: center;
     pointer-events: auto;
     backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    padding: 20px; /* 防止内容贴边 */
 }
+
 .modal-content {
     background: #111;
     border: 2px solid var(--primary);
     padding: 40px;
-    width: 500px;
-    max-width: 90%;
+    width: 100%; max-width: 500px; /* 关键适配：最大500，平时100% */
     position: relative;
     box-shadow: 0 0 50px rgba(0,0,0,1);
     border-radius: 8px;
+    display: flex; flex-direction: column;
 }
+
+/* 移动端调整内边距 */
+@media (max-width: 480px) {
+    .modal-content { padding: 25px 20px; }
+}
+
 .close-modal {
-    position: absolute; top: 10px; right: 20px;
-    font-size: 30px; color: #666; cursor: pointer; transition: color 0.3s;
+    position: absolute; top: 10px; right: 15px;
+    font-size: 30px; color: #666; cursor: pointer; z-index: 10;
 }
-.close-modal:hover { color: #fff; }
+.close-modal:active { color: #fff; }
 
 /* 帮助内容样式 */
-.help-item { display: flex; align-items: flex-start; margin-bottom: 25px; }
-.help-item .icon { font-size: 30px; margin-right: 20px; min-width: 40px; text-align: center; }
-.help-item h3 { margin: 0 0 5px 0; color: var(--primary); font-size: 18px; border: none; padding: 0; }
-.help-item p { margin: 0; color: #ccc; font-size: 14px; line-height: 1.5; }
+.help-item { display: flex; align-items: flex-start; margin-bottom: 25px; text-align: left; }
+.help-item .icon { font-size: 30px; margin-right: 15px; min-width: 35px; text-align: center; }
+.help-item h3 { margin: 0 0 5px 0; color: var(--primary); font-size: 16px; }
+.help-item p { margin: 0; color: #ccc; font-size: 13px; line-height: 1.4; }
 
 /* 设置内容样式 */
-.setting-item { margin-bottom: 25px; }
-.setting-item label { display: block; color: var(--primary); margin-bottom: 8px; font-weight: bold; }
+.setting-item { margin-bottom: 25px; text-align: left; }
+.setting-item label { display: block; color: var(--primary); margin-bottom: 8px; font-weight: bold; font-size: 14px; }
 .setting-desc { font-size: 12px; color: #888; margin: 0 0 10px 0; }
 .setting-item input {
     width: 100%; background: rgba(255,255,255,0.05);
     border: 1px solid #444; color: #fff; padding: 10px;
-    outline: none; font-family: monospace;
-    box-sizing: border-box; transition: border-color 0.3s;
+    outline: none; font-family: monospace; border-radius: 4px;
 }
 .setting-item input:focus { border-color: var(--primary); }
 
 /* 大号模态框 (法律条款) */
 .large-modal {
-    width: 700px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
+    max-width: 700px; /* 桌面更宽 */
+    height: 80vh; /* 移动端占满高度 */
+    max-height: 600px;
 }
 
 /* 法律文本区域 */
 .legal-text {
     flex: 1; overflow-y: auto; margin-top: 10px; padding-right: 10px;
     text-align: left; font-family: "Segoe UI", sans-serif;
+    -webkit-overflow-scrolling: touch; /* 移动端滚动流畅 */
 }
-.legal-text::-webkit-scrollbar { width: 6px; }
-.legal-text::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
-.legal-text::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px; }
 
-.legal-text h3 { color: var(--primary); font-size: 16px; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px dashed rgba(212, 175, 55, 0.3); }
-.legal-text p { font-size: 13px; line-height: 1.6; color: #ccc; margin-bottom: 10px; }
-.legal-text strong { color: #fff; font-weight: bold; }
+/* 滚动条样式 */
+.legal-text::-webkit-scrollbar { width: 4px; }
+.legal-text::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+.legal-text::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 2px; }
+
+.legal-text h3 { color: var(--primary); font-size: 15px; margin-top: 20px; margin-bottom: 8px; border-bottom: 1px dashed rgba(212, 175, 55, 0.3); }
+.legal-text p { font-size: 12px; line-height: 1.6; color: #ccc; margin-bottom: 10px; }

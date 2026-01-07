@@ -3,17 +3,16 @@ export const CONFIG = {
     cardCount: 22,
     cardWidth: 2.6,
     cardHeight: 4.6,
-    selectionThreshold: 0.5, // 捏合确认时间
-    cooldownTime: 1000,      // 冷却时间
-    deckRadius: 30,          // 【优化】加大半径，让弧度更平缓，更像真实牌桌
+    selectionThreshold: 0.5, // 捏合确认时间 (秒)
+    cooldownTime: 1000,      // 冷却时间 (毫秒)
+    deckRadius: 30,          // 牌组半径
     cameraSensX: 0.08,
     cameraSensY: 0.03,
-    pinchDist: 0.06,         // 捏合触发距离
+    pinchDist: 0.06,         // 捏合触发阈值 (归一化距离)
     fistCompactness: 0.15    // 握拳判定阈值
 };
 
-// 资源路径
-// 系统全本地渲染，无需外部链接
+// 资源路径 (全本地生成，留空即可)
 export const ASSETS = {};
 
 // 塔罗牌数据

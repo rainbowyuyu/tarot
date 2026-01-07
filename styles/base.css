@@ -1,16 +1,33 @@
 /* --- 全局基础样式 --- */
 :root {
     --primary: #d4af37; /* 金色 */
+    --primary-dim: rgba(212, 175, 55, 0.5);
     --bg: #050505;
     --glass: rgba(20, 20, 20, 0.85);
+
+    /* 安全区域变量 (适配 iPhone 刘海屏等) */
+    --safe-top: env(safe-area-inset-top, 20px);
+    --safe-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+*, *::before, *::after {
+    box-sizing: border-box; /* 关键：统一盒子模型 */
 }
 
 body, html {
-    margin: 0; padding: 0; overflow: hidden;
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     background-color: var(--bg);
     font-family: "Cinzel", "Segoe UI", serif;
     color: #eee;
-    user-select: none;
+    user-select: none; /* 禁止选中文本 */
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent; /* 移除移动端点击高亮 */
+    font-size: 16px;
+}
+
+/* 移动端字体适配 */
+@media (max-width: 768px) {
+    body { font-size: 14px; }
 }
 
 /* 3D 渲染容器 */

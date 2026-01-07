@@ -2,11 +2,21 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- 核心适配：禁止缩放，适配刘海屏，强制竖屏友好 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
     <title>塔罗牌预测系统</title>
+
+    <!-- PWA / 移动端优化标签 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#050505">
 
     <!-- logo -->
     <link rel="icon" href="assets/logo2.png" type="image/png">
+    <link rel="apple-touch-icon" href="assets/logo2.png">
 
     <!-- 引入自定义样式 (模块化) -->
     <link rel="stylesheet" href="styles/base.css">
@@ -32,7 +42,8 @@
     </div>
 
     <!-- 摄像头视频流 (隐藏，用于分析) -->
-    <video id="input_video"></video>
+    <!-- playsinline 是微信/iOS 禁止自动全屏播放视频的关键 -->
+    <video id="input_video" playsinline webkit-playsinline></video>
 
     <!-- 3D 渲染容器 -->
     <div id="canvas-container"></div>
@@ -74,7 +85,7 @@
             </div>
         </div>
 
-        <!-- 设置模态框 (原 API Key 输入区移至此处) -->
+        <!-- 设置模态框 -->
         <div id="settings-modal" class="modal-backdrop">
             <div class="modal-content">
                 <span id="close-settings" class="close-modal">&times;</span>
@@ -88,12 +99,12 @@
 
                 <div class="setting-item">
                     <label>关于我</label>
-                    <p class="setting-desc">Arcana Gestura v1.1.0 - 基于 WebGazer 与 Three.js 构建。 &copy; rainbow_yu</p>
+                    <p class="setting-desc">Arcana Gestura v1.2.0 - 基于 WebGazer 与 Three.js 构建。 &copy; rainbow_yu</p>
                 </div>
             </div>
         </div>
 
-        <!-- 帮助模态框 (重构为 新手引导/帮助 混合模式) -->
+        <!-- 帮助模态框 (新手引导) -->
         <div id="help-modal" class="modal-backdrop">
             <div class="modal-content">
                 <span id="close-help" class="close-modal">&times;</span>
@@ -101,8 +112,6 @@
                 <h2 style="margin-bottom: 20px;">仪式指引</h2>
 
                 <div class="tutorial-container">
-
-                    <!-- ... (步骤 1, 2, 3 的 HTML 内容完全保持不变) ... -->
                     <!-- 步骤 1: 距离 -->
                     <div class="tutorial-step active" data-step="1">
                         <div class="demo-stage">
@@ -155,9 +164,8 @@
                         <span class="dot"></span>
                     </div>
 
-                    <!-- 控制区域 (修改结构) -->
+                    <!-- 控制区域 -->
                     <div class="tutorial-controls">
-                        <!-- 新增：不再提示复选框 -->
                         <label class="dont-show-label">
                             <input type="checkbox" id="tut-checkbox">
                             <span>不再自动提示</span>
@@ -173,7 +181,7 @@
             </div>
         </div>
 
-        <!-- 右下角手势提示 -->
+        <!-- 右下角手势提示 (移动端 CSS 已设为隐藏) -->
         <div id="gesture-hint">
             <p>🤏 捏合：选牌</p>
             <p>🤛 握拳：重置</p>
@@ -184,7 +192,7 @@
             <p class="beian-info">
                 <span>&copy; 2026 rainbow_yu. All Rights Reserved.</span> |
                 <span>沪ICP备2025156088号-1</span> |
-<!--                <span>京公网安备 11010000000000号</span> |-->
+                <!--<span>京公网安备 11010000000000号</span> |-->
                 <a href="#" id="privacy-link">隐私协议</a> | <a href="#" id="tos-link">服务条款</a>
             </p>
         </footer>
@@ -225,13 +233,7 @@
                     <p>您同意不利用本服务进行任何非法活动。您输入 API Key 时，必须使用您合法拥有的密钥。严禁试图通过逆向工程、攻击或滥用接口来干扰系统的正常运行。</p>
 
                     <h3>3. 免责声明</h3>
-                    <p>本服务按“现状”提供，不包含任何形式的明示或暗示保证。开发者不对 AI 生成内容的准确性、可靠性或完整性负责。由于网络延迟、API 服务中断或设备兼容性问题导致的服务不可用，开发者不承担赔偿责任。</p>
-
-                    <h3>4. 知识产权</h3>
-                    <p>本网站的视觉设计、3D 场景交互逻辑及代码架构归开发者所有。您可以出于个人非商业目的使用本服务。</p>
-
-                    <h3>5. 条款修改</h3>
-                    <p>我们保留随时修改本条款的权利。继续使用本服务即表示您接受修订后的条款。</p>
+                    <p>本服务按“现状”提供，不包含任何形式的明示或暗示保证。开发者不对 AI 生成内容的准确性、可靠性或完整性负责。</p>
                 </div>
             </div>
         </div>

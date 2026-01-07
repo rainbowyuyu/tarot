@@ -5,6 +5,11 @@ import { fetchInterpretation } from './api.js';
 
 const raycaster = new THREE.Raycaster();
 
+// --- 设备环境检测 ---
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+
+// 动画函数 (保持不变)
 function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     const startPos = obj.position.clone();
     const startRot = obj.rotation.clone();
@@ -34,7 +39,7 @@ function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     loop();
 }
 
-// --- 游戏逻辑 ---
+// --- 游戏逻辑 (选牌、揭牌、结果展示) ---
 
 function confirmSelection(cardGroup) {
     if (STATE.selectedCards.length >= 3) return;
@@ -188,6 +193,7 @@ function resetGame() {
     }, 1500);
 }
 
+// --- 物理更新与交互循环 ---
 function updatePhysics() {
     const time = Date.now() * 0.001;
     starField.rotation.y = time * 0.02;
@@ -196,6 +202,7 @@ function updatePhysics() {
         STATE.cooldown -= 16;
     }
 
+    // 牌组跟随手势的缓动效果
     if (STATE.phase === 'selecting') {
         const targetDeckPosX = -STATE.handPos.x * 75;
         deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * 0.08;
@@ -209,7 +216,8 @@ function updatePhysics() {
         deckGroup.rotation.z += (STATE.handPos.x * 0.1 - deckGroup.rotation.z) * 0.05;
     }
 
-    const sensitivity = 2.5;
+    // 准星移动逻辑
+    const sensitivity = isMobile ? 3.0 : 2.5; // 移动端稍微提高灵敏度
     const ndcX = Math.max(-1, Math.min(1, STATE.handPos.x * sensitivity));
     const ndcY = Math.max(-1, Math.min(1, STATE.handPos.y * sensitivity));
 
@@ -222,8 +230,8 @@ function updatePhysics() {
     pointLight.position.copy(reticle.position);
     pointLight.position.z += 1;
 
+    // 射线检测
     raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
-
     const intersects = raycaster.intersectObjects(deckGroup.children, true);
 
     let hoveredCard = null;
@@ -236,12 +244,11 @@ function updatePhysics() {
 
     const absoluteFaceCameraRot = -deckGroup.rotation.y;
 
-    // --- 核心修改：准星动画状态管理 ---
-    // 默认状态 (未选中)
+    // 准星状态变量
     let reticleScale = 1.0;
     let reticleCoreScale = 0.0;
     let reticleRotSpeed = 1.0;
-    let reticleColor = 0xffaa00; // 金色
+    let reticleColor = 0xffaa00;
 
     deckGroup.children.forEach(c => {
         const isCurrentlyHovered = (c === hoveredCard);
@@ -265,25 +272,19 @@ function updatePhysics() {
                 ui.progCont.style.display = 'block';
                 ui.progress.style.width = `${progress * 100}%`;
 
-                // --- 动态交互：计算准星变化 ---
-                // 外环收缩：从 1.0 缩小到 0.6
+                // 准星动态反馈
                 reticleScale = 1.0 - (progress * 0.4);
-                // 内芯变大：从 0.0 变到 1.0
                 reticleCoreScale = progress;
-                // 旋转加速
                 reticleRotSpeed = 5.0 + (progress * 10.0);
-                // 颜色变化：金色 -> 青白色 (表示充能完毕)
                 reticleColor = 0x00ffff;
 
-                c.position.x = c.userData.originalPos.x + (Math.random()-0.5) * 0.05;
+                c.position.x = c.userData.originalPos.x + (Math.random()-0.5) * 0.05; // 震动反馈
 
                 if (progress >= 1.0) confirmSelection(c);
             } else {
                 STATE.pinchStartTime = 0;
                 ui.progCont.style.display = 'none';
                 ui.progress.style.width = '0%';
-
-                // 悬停但未捏合：轻微放大外环
                 reticleScale = 1.3;
             }
 
@@ -296,10 +297,7 @@ function updatePhysics() {
             c.position.y += (c.userData.originalPos.y + floatY - c.position.y) * 0.1;
             c.position.x += (c.userData.originalPos.x - c.position.x) * 0.1;
 
-            const currentScale = c.scale.x;
-            if (Math.abs(currentScale - 1) > 0.01) {
-                 c.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
-            }
+            if (Math.abs(c.scale.x - 1) > 0.01) c.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
 
             let targetRot = (c.userData.baseAngle * 0.15) - deckGroup.rotation.y;
             c.rotation.y += (targetRot - c.rotation.y) * 0.1;
@@ -313,20 +311,19 @@ function updatePhysics() {
         reticleCoreScale = 0.0;
     }
 
-    // --- 应用准星动画 ---
-    // 平滑插值更新
+    // 更新准星动画
     reticleOuter.scale.lerp(new THREE.Vector3(reticleScale, reticleScale, 1), 0.2);
     reticleCore.scale.lerp(new THREE.Vector3(reticleCoreScale, reticleCoreScale, 1), 0.2);
-    reticleOuter.rotation.z -= time * 0.05 * reticleRotSpeed; // 基础旋转 + 加速
+    reticleOuter.rotation.z -= time * 0.05 * reticleRotSpeed;
 
-    // 颜色更新
     if (reticleOuter.material.color.getHex() !== reticleColor) {
         reticleOuter.material.color.lerp(new THREE.Color(reticleColor), 0.1);
     } else {
-        reticleOuter.material.color.setHex(0xffaa00); // 恢复金色
+        reticleOuter.material.color.setHex(0xffaa00);
     }
 }
 
+// 握拳检测逻辑
 function isHandFist(landmarks) {
     const wrist = landmarks[0];
     const tips = [8, 12, 16, 20];
@@ -338,13 +335,20 @@ function isHandFist(landmarks) {
     return foldedCount >= 3;
 }
 
+// --- MediaPipe 与摄像头初始化 ---
+
 const videoElement = document.getElementById('input_video');
+// 关键优化：为微信和iOS添加强制内联播放属性，防止全屏或黑屏
+videoElement.setAttribute('playsinline', 'true');
+videoElement.setAttribute('webkit-playsinline', 'true');
+videoElement.setAttribute('muted', 'true'); // 必须静音才能在很多移动浏览器自动播放
+
 const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-// 优化：在移动端降低复杂度以提升性能
-const isMobile = window.innerWidth < 768;
+
+// 针对移动端的 MediaPipe 优化
 hands.setOptions({
-    maxNumHands: 2,
-    modelComplexity: isMobile ? 0 : 1, // 0: Lite, 1: Full
+    maxNumHands: isMobile ? 1 : 2,      // 移动端只追踪一只手，提升性能
+    modelComplexity: isMobile ? 0 : 1,  // 0:Lite (快), 1:Full (准)。移动端选 Lite
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
 });
@@ -354,22 +358,22 @@ hands.onResults((results) => {
         STATE.handDetected = true;
 
         const landmarks = results.multiHandLandmarks[0];
+        // 坐标转换：MediaPipe 坐标系 -> 屏幕 NDC 坐标
         const x = (1 - landmarks[9].x) * 2 - 1;
         const y = -(landmarks[9].y * 2 - 1);
+
+        // 平滑移动
         STATE.handPos.x += (x - STATE.handPos.x) * 0.2;
         STATE.handPos.y += (y - STATE.handPos.y) * 0.2;
 
+        // 捏合检测
         const dist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
         STATE.isPinching = dist < CONFIG.pinchDist;
 
+        // 重置手势检测 (仅在结果页)
         let isResetGesture = false;
         if (STATE.phase === 'result') {
-            for (const handLandmarks of results.multiHandLandmarks) {
-                if (isHandFist(handLandmarks)) {
-                    isResetGesture = true;
-                    break;
-                }
-            }
+            if (isHandFist(landmarks)) isResetGesture = true;
         }
 
         if (isResetGesture) {
@@ -392,24 +396,41 @@ hands.onResults((results) => {
     }
 });
 
-// --- 核心修改：摄像头初始化支持移动端 ---
-// 添加 facingMode: 'user' 强制使用前置摄像头
+// 使用 Camera Utils，但配置更灵活
 const cameraUtils = new Camera(videoElement, {
   onFrame: async () => { await hands.send({image: videoElement}); },
-  width: isMobile ? 480 : 640,  // 移动端降低分辨率
-  height: isMobile ? 640 : 480,
-  facingMode: 'user' // 关键：指定前置摄像头
+  // 关键优化：根据设备类型请求分辨率
+  // 移动端请求 360x640 (竖屏) 以减少计算量，电脑端请求 1280x720 (横屏)
+  width: isMobile ? 360 : 1280,
+  height: isMobile ? 640 : 720,
+  facingMode: 'user' // 强制前置摄像头
 });
 
+// 绑定启动按钮
 ui.startBtn.addEventListener('click', () => {
+    // 检查 HTTPS (MediaPipe/摄像头必须)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        alert("安全警告：请在 HTTPS 环境下运行本应用，否则无法打开摄像头。");
+        return;
+    }
+
+    // 检查浏览器支持
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("您的浏览器不支持摄像头访问，请使用 Chrome/Safari 或微信内置浏览器。");
+        return;
+    }
+
     ui.loader.style.display = 'none';
+
+    // 启动摄像头
     cameraUtils.start().catch(err => {
         console.error("摄像头启动失败:", err);
-        alert("无法访问摄像头，请确保已授权并在 HTTPS 环境下运行。");
+        alert(`无法访问摄像头：${err.name}。请检查权限设置。`);
     });
 });
 
 window.onload = () => {
+    // 模拟资源加载
     setTimeout(() => {
         ui.spinner.style.display = 'none';
         ui.loaderText.innerText = "系统就绪";
@@ -417,6 +438,7 @@ window.onload = () => {
     }, 1000);
 };
 
+// 渲染循环
 function animate() {
     requestAnimationFrame(animate);
     updatePhysics();

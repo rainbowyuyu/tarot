@@ -1,12 +1,17 @@
 /* --- 引导与交互提示样式 --- */
 
-/* 核心引导区 (原有的“举起右手”提示，保持不变) */
+/* 核心引导区 (举起右手提示) */
 #guide-overlay {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     text-align: center; pointer-events: auto; transition: opacity 0.5s; z-index: 10;
+    width: 100%; padding: 0 20px;
 }
 .gesture-icon { font-size: 40px; margin-bottom: 10px; display: block; animation: float 2s infinite ease-in-out; }
-.instruction { background: var(--glass); padding: 20px 40px; border: 1px solid var(--primary); border-radius: 4px; }
+.instruction {
+    background: var(--glass); padding: 20px 40px;
+    border: 1px solid var(--primary); border-radius: 4px;
+    display: inline-block; max-width: 90%;
+}
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 
 /* 进度条 */
@@ -17,33 +22,30 @@
 }
 #progress-bar { width: 0%; height: 100%; background: var(--primary); transition: width 0.1s linear; box-shadow: 0 0 10px var(--primary); }
 
-/* 右下角手势提示 */
+/* 右下角手势提示 (移动端隐藏，节省空间) */
 #gesture-hint {
-    position: absolute; bottom: 70px; right: 20px;
+    position: absolute; bottom: 80px; right: 20px;
     text-align: right; font-size: 12px; opacity: 0.6; pointer-events: none;
 }
+@media (max-width: 600px) {
+    #gesture-hint { display: none; }
+}
 
-/* --- 新增：新手引导教程 (Tutorial) 样式 --- */
+/* --- 新手引导教程 (Tutorial) 样式 --- */
 
-/* 教程容器布局 */
 .tutorial-container {
     width: 100%;
-    max-width: 500px;
+    max-width: 500px; /* 桌面端最大宽度 */
     text-align: center;
     position: relative;
     overflow: hidden;
 }
 
-/* 单个步骤幻灯片 */
 .tutorial-step {
-    display: none; /* 默认隐藏 */
-    flex-direction: column;
-    align-items: center;
+    display: none; flex-direction: column; align-items: center;
     animation: fadeIn 0.5s;
 }
-.tutorial-step.active {
-    display: flex;
-}
+.tutorial-step.active { display: flex; }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -55,166 +57,92 @@
     border-radius: 8px;
     margin-bottom: 20px;
     position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    display: flex; justify-content: center; align-items: center;
     border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* 移动端减小演示区域高度 */
+@media (max-width: 480px), (max-height: 600px) {
+    .demo-stage { height: 140px; margin-bottom: 15px; }
+    .tutorial-container h3 { font-size: 16px; margin: 5px 0; }
+    .tutorial-container p { font-size: 12px; }
 }
 
 /* 底部导航点 */
 .step-indicators {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 20px;
+    display: flex; justify-content: center; gap: 8px; margin-bottom: 20px;
 }
 .dot {
-    width: 8px; height: 8px;
-    background: #555;
-    border-radius: 50%;
-    transition: 0.3s;
+    width: 8px; height: 8px; background: #555; border-radius: 50%; transition: 0.3s;
 }
 .dot.active { background: var(--primary); transform: scale(1.2); }
 
-/* --- 控制区域布局 (Flexbox: 左边复选框，右边按钮组) --- */
+/* --- 控制区域布局 --- */
 .tutorial-controls {
-    display: flex;
-    justify-content: space-between; /* 两端对齐 */
-    align-items: center;            /* 垂直居中 */
-    width: 100%;
-    margin-top: 10px;
-    padding-top: 15px;
-    border-top: 1px solid rgba(255,255,255,0.1); /* 增加一条分割线提升视觉层次 */
+    display: flex; justify-content: space-between; align-items: center;
+    width: 100%; margin-top: 10px; padding-top: 15px;
+    border-top: 1px solid rgba(255,255,255,0.1);
 }
 
 /* 复选框样式 */
 .dont-show-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: #aaa;
-    cursor: pointer;
-    user-select: none;
-}
-.dont-show-label:hover {
-    color: #fff;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: #aaa; cursor: pointer; user-select: none;
 }
 .dont-show-label input[type="checkbox"] {
-    accent-color: var(--primary); /* 使用主题金作为勾选颜色 */
-    width: 14px;
-    height: 14px;
-    cursor: pointer;
-}
-
-/* 按钮组包装器 */
-.tut-btns {
-    display: flex;
-    gap: 10px;
+    accent-color: var(--primary); width: 14px; height: 14px;
 }
 
 /* 按钮组 */
-.tutorial-controls {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    margin-top: 10px;
+.tut-btns { display: flex; gap: 10px; }
+
+.btn-secondary, .btn-primary {
+    padding: 8px 16px; border-radius: 4px; cursor: pointer;
+    font-size: 13px; transition: all 0.2s;
 }
-/* 按钮样式 (微调) */
+
 .btn-secondary {
-    background: transparent;
-    border: 1px solid #555;
-    color: #aaa;
-    padding: 6px 16px;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.2s;
+    background: transparent; border: 1px solid #555; color: #aaa;
 }
-.btn-secondary:hover { border-color: #888; color: #fff; }
+.btn-secondary:active { background: rgba(255,255,255,0.1); }
 
 .btn-primary {
-    background: var(--primary);
-    border: none;
-    color: #000;
-    padding: 6px 20px;
-    font-weight: bold;
-    cursor: pointer;
-    border-radius: 4px;
+    background: var(--primary); border: none; color: #000; font-weight: bold;
     box-shadow: 0 0 10px var(--primary-dim);
-    transition: all 0.2s;
 }
-.btn-primary:hover { transform: scale(1.05); background: #fff; }
+.btn-primary:active { transform: scale(0.95); }
 
-/* --- 纯 CSS 绘制的动态演示图形 --- */
-
-/* 1. 距离演示 */
-.cam-icon {
-    width: 40px; height: 30px; border: 2px solid #fff; border-radius: 4px;
-    position: absolute; top: 40px;
-}
+/* --- 纯 CSS 绘制动画 (保持原样，自动适配容器中心) --- */
+/* ... (距离、移动、捏合动画 CSS 保持不变，因为是绝对定位在 center) ... */
+.cam-icon { width: 40px; height: 30px; border: 2px solid #fff; border-radius: 4px; position: absolute; top: 25%; }
 .cam-icon::after { content:''; display:block; width:6px; height:6px; background:#fff; border-radius:50%; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
 
 .face-icon {
     width: 40px; height: 50px; border: 2px solid var(--primary); border-radius: 50%;
-    position: absolute; bottom: 40px;
-    animation: move-depth 3s infinite ease-in-out;
+    position: absolute; bottom: 25%; animation: move-depth 3s infinite ease-in-out;
 }
-/* 模拟前后移动 */
 @keyframes move-depth {
-    0%, 100% { transform: scale(0.8); opacity: 0.5; border-color: red; } /* 太远 */
-    50% { transform: scale(1.2); opacity: 1; border-color: var(--primary); box-shadow: 0 0 15px var(--primary); } /* 合适 */
+    0%, 100% { transform: scale(0.8); opacity: 0.5; border-color: red; }
+    50% { transform: scale(1.2); opacity: 1; border-color: var(--primary); box-shadow: 0 0 15px var(--primary); }
 }
 
-/* 2. 移动演示 */
 .hand-icon {
     width: 60px; height: 80px;
     background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M21 9a2.5 2.5 0 0 0-5 0v-2a2.5 2.5 0 0 0-5 0V3a2.5 2.5 0 0 0-5 0v8.6a4.5 4.5 0 1 0 9 0V9a.5.5 0 0 1 1 0v4a2.5 2.5 0 0 0 5 0V9z"/></svg>') no-repeat center/contain;
-    position: absolute;
-    opacity: 0.8;
+    position: absolute; opacity: 0.8;
 }
-
 .anim-move { animation: move-hand 2s infinite ease-in-out; }
-.cursor-target {
-    width: 20px; height: 20px; border: 2px solid var(--primary); border-radius: 50%;
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-}
-.cursor-dot {
-    width: 10px; height: 10px; background: var(--primary); border-radius: 50%;
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    animation: move-cursor 2s infinite ease-in-out;
-}
+.cursor-target { width: 20px; height: 20px; border: 2px solid var(--primary); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.cursor-dot { width: 10px; height: 10px; background: var(--primary); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: move-cursor 2s infinite ease-in-out; }
 
 @keyframes move-hand { 0%, 100% { transform: translateX(-40px) rotate(-10deg); } 50% { transform: translateX(40px) rotate(10deg); } }
 @keyframes move-cursor { 0%, 100% { transform: translate(calc(-50% - 40px), -50%); } 50% { transform: translate(calc(-50% + 40px), -50%); } }
 
-/* 3. 捏合演示 */
-/* 使用两个分开的部分模拟手指捏合 */
-.pinch-hand {
-    width: 60px; height: 80px; position: relative;
-}
-.finger-thumb {
-    width: 10px; height: 30px; background: #fff; border-radius: 5px;
-    position: absolute; bottom: 10px; left: 10px;
-    transform-origin: bottom center;
-    transform: rotate(-30deg);
-    animation: pinch-thumb 2s infinite;
-}
-.finger-index {
-    width: 10px; height: 40px; background: #fff; border-radius: 5px;
-    position: absolute; bottom: 10px; right: 10px;
-    transform-origin: bottom center;
-    transform: rotate(30deg);
-    animation: pinch-index 2s infinite;
-}
-.pinch-palm {
-    width: 40px; height: 40px; background: #fff; border-radius: 10px;
-    position: absolute; bottom: 0; left: 10px;
-}
-.pinch-ring {
-    width: 50px; height: 50px; border: 2px dashed var(--primary); border-radius: 50%;
-    position: absolute; top: -10px; left: 5px;
-    animation: pinch-ring 2s infinite;
-}
+.pinch-hand { width: 60px; height: 80px; position: relative; }
+.finger-thumb { width: 10px; height: 30px; background: #fff; border-radius: 5px; position: absolute; bottom: 10px; left: 10px; transform-origin: bottom center; transform: rotate(-30deg); animation: pinch-thumb 2s infinite; }
+.finger-index { width: 10px; height: 40px; background: #fff; border-radius: 5px; position: absolute; bottom: 10px; right: 10px; transform-origin: bottom center; transform: rotate(30deg); animation: pinch-index 2s infinite; }
+.pinch-palm { width: 40px; height: 40px; background: #fff; border-radius: 10px; position: absolute; bottom: 0; left: 10px; }
+.pinch-ring { width: 50px; height: 50px; border: 2px dashed var(--primary); border-radius: 50%; position: absolute; top: -10px; left: 5px; animation: pinch-ring 2s infinite; }
 
 @keyframes pinch-thumb { 0%, 100% { transform: rotate(-30deg); } 50% { transform: rotate(-5deg); } }
 @keyframes pinch-index { 0%, 100% { transform: rotate(30deg); } 50% { transform: rotate(5deg); } }

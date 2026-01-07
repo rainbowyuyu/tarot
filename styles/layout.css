@@ -5,20 +5,29 @@
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     z-index: 10; pointer-events: none;
     display: flex; flex-direction: column; justify-content: space-between;
+    padding-top: var(--safe-top); /* 避开刘海 */
 }
 
 /* 顶部状态栏 */
 .status-bar {
-    padding: 20px; text-align: center;
+    padding: 15px; text-align: center;
     background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
     pointer-events: none;
+    transition: opacity 0.3s;
 }
 h1 { margin: 0; font-weight: 400; color: var(--primary); letter-spacing: 4px; font-size: 24px; text-shadow: 0 0 10px var(--primary); }
 .sub-text { font-size: 14px; opacity: 0.7; margin-top: 5px; letter-spacing: 1px; }
 
+/* 移动端缩小标题 */
+@media (max-width: 480px) {
+    h1 { font-size: 20px; letter-spacing: 2px; }
+    .sub-text { font-size: 12px; }
+    .status-bar { padding: 10px; }
+}
+
 /* 顶部控制按钮组 */
 .top-controls {
-    position: absolute; top: 20px; right: 20px;
+    position: absolute; top: calc(var(--safe-top) + 15px); right: 20px;
     display: flex; gap: 15px;
     z-index: 100;
 }
@@ -36,7 +45,7 @@ h1 { margin: 0; font-weight: 400; color: var(--primary); letter-spacing: 4px; fo
     display: flex; align-items: center; justify-content: center;
 }
 
-.top-controls button:hover {
+.top-controls button:hover, .top-controls button:active {
     background: var(--primary);
     color: #000;
     box-shadow: 0 0 15px var(--primary);
@@ -47,13 +56,25 @@ h1 { margin: 0; font-weight: 400; color: var(--primary); letter-spacing: 4px; fo
 /* 底部 Footer */
 #site-footer {
     position: absolute; bottom: 0; left: 0; width: 100%;
-    text-align: center; padding: 15px 0;
+    text-align: center;
+    padding: 15px 10px;
+    padding-bottom: calc(15px + var(--safe-bottom)); /* 适配底部横条 */
     background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
     color: #666; font-size: 12px;
     pointer-events: auto;
     z-index: 50;
 }
-#site-footer p { margin: 5px 0; }
+#site-footer p { margin: 5px 0; line-height: 1.5; }
+
 .beian-info { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.beian-info span { white-space: nowrap; }
 .beian-info a { color: #888; text-decoration: none; transition: color 0.3s; }
 .beian-info a:hover { color: var(--primary); }
+
+/* 移动端优化 Footer 布局 */
+@media (max-width: 600px) {
+    .beian-info { flex-direction: column; gap: 2px; }
+    .beian-info span { display: block; }
+    /* 隐藏部分次要备案信息以保持界面整洁，或者缩小字号 */
+    .beian-info { font-size: 10px; transform: scale(0.9); }
+}

@@ -1,8 +1,35 @@
 /* --- 加载界面样式 --- */
 #loader {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: #000; z-index: 999; display: flex; align-items: center; justify-content: center; flex-direction: column;
+    background: #000; z-index: 999;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    padding-bottom: 50px; /* 视觉中心上移一点 */
 }
-.spinner { width: 50px; height: 50px; border: 2px solid #333; border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+.spinner {
+    width: 50px; height: 50px;
+    border: 2px solid #333;
+    border-top: 2px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-#start-btn { margin-top:20px; padding:10px 30px; background:var(--primary); border:none; cursor:pointer; display:none; }
+
+#loader p {
+    margin-top: 20px; color: #666; font-size: 14px; letter-spacing: 1px;
+}
+
+#start-btn {
+    margin-top:30px;
+    padding:12px 40px;
+    background:var(--primary);
+    color: #000;
+    font-weight: bold;
+    border:none;
+    border-radius: 4px;
+    cursor:pointer;
+    display:none;
+    font-family: "Cinzel", serif;
+    box-shadow: 0 0 15px var(--primary-dim);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+#start-btn:active { transform: scale(0.95); }
