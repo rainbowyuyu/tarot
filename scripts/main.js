@@ -1,6 +1,6 @@
 import { CONFIG, STATE } from './globals.js';
 import { ui } from './ui.js';
-import { scene, camera, renderer, deckGroup, cards, reticle, pointLight, starField, initDeck, getCardFrontMaterial, createCardCanvas } from './scene.js';
+import { scene, camera, renderer, deckGroup, cards, reticle, reticleOuter, reticleCore, pointLight, starField, initDeck, getCardFrontMaterial, createCardCanvas } from './scene.js';
 import { fetchInterpretation } from './api.js';
 
 const raycaster = new THREE.Raycaster();
@@ -236,6 +236,13 @@ function updatePhysics() {
 
     const absoluteFaceCameraRot = -deckGroup.rotation.y;
 
+    // --- 核心修改：准星动画状态管理 ---
+    // 默认状态 (未选中)
+    let reticleScale = 1.0;
+    let reticleCoreScale = 0.0;
+    let reticleRotSpeed = 1.0;
+    let reticleColor = 0xffaa00; // 金色
+
     deckGroup.children.forEach(c => {
         const isCurrentlyHovered = (c === hoveredCard);
         const coreMesh = c.children[0];
@@ -258,6 +265,16 @@ function updatePhysics() {
                 ui.progCont.style.display = 'block';
                 ui.progress.style.width = `${progress * 100}%`;
 
+                // --- 动态交互：计算准星变化 ---
+                // 外环收缩：从 1.0 缩小到 0.6
+                reticleScale = 1.0 - (progress * 0.4);
+                // 内芯变大：从 0.0 变到 1.0
+                reticleCoreScale = progress;
+                // 旋转加速
+                reticleRotSpeed = 5.0 + (progress * 10.0);
+                // 颜色变化：金色 -> 青白色 (表示充能完毕)
+                reticleColor = 0x00ffff;
+
                 c.position.x = c.userData.originalPos.x + (Math.random()-0.5) * 0.05;
 
                 if (progress >= 1.0) confirmSelection(c);
@@ -265,6 +282,9 @@ function updatePhysics() {
                 STATE.pinchStartTime = 0;
                 ui.progCont.style.display = 'none';
                 ui.progress.style.width = '0%';
+
+                // 悬停但未捏合：轻微放大外环
+                reticleScale = 1.3;
             }
 
         } else {
@@ -289,6 +309,21 @@ function updatePhysics() {
     if (!hoveredCard) {
         STATE.pinchStartTime = 0;
         ui.progCont.style.display = 'none';
+        reticleScale = 1.0;
+        reticleCoreScale = 0.0;
+    }
+
+    // --- 应用准星动画 ---
+    // 平滑插值更新
+    reticleOuter.scale.lerp(new THREE.Vector3(reticleScale, reticleScale, 1), 0.2);
+    reticleCore.scale.lerp(new THREE.Vector3(reticleCoreScale, reticleCoreScale, 1), 0.2);
+    reticleOuter.rotation.z -= time * 0.05 * reticleRotSpeed; // 基础旋转 + 加速
+
+    // 颜色更新
+    if (reticleOuter.material.color.getHex() !== reticleColor) {
+        reticleOuter.material.color.lerp(new THREE.Color(reticleColor), 0.1);
+    } else {
+        reticleOuter.material.color.setHex(0xffaa00); // 恢复金色
     }
 }
 

@@ -348,10 +348,25 @@ export function initDeck() {
 }
 initDeck();
 
-const reticleGeo = new THREE.RingGeometry(0.12, 0.16, 32);
-const reticleMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
-export const reticle = new THREE.Mesh(reticleGeo, reticleMat);
+// --- 核心修改：重新设计准星 (Reticle) ---
+// 我们不再使用单一的 Mesh，而是创建一个 Group，包含外环 (Outer) 和内芯 (Inner)
+
+export const reticle = new THREE.Group(); // 主容器
 scene.add(reticle);
+
+// 准星
+// 1. 外环：一直显示，作为瞄准器
+const ringGeo = new THREE.RingGeometry(0.12, 0.15, 32);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+export const reticleOuter = new THREE.Mesh(ringGeo, ringMat);
+reticle.add(reticleOuter);
+
+// 2. 内芯：用于显示捏合进度 (初始比例为 0)
+const coreGeo = new THREE.CircleGeometry(0.10, 32);
+const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+export const reticleCore = new THREE.Mesh(coreGeo, coreMat);
+reticleCore.scale.set(0, 0, 0); // 默认隐藏
+reticle.add(reticleCore);
 
 const starGeo = new THREE.BufferGeometry();
 const starCount = 1000; // 降低粒子数优化移动端
