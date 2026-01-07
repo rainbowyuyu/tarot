@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>塔罗牌预测系统</title>
 
+    <!-- logo -->
+    <link rel="icon" href="assets/logo2.png" type="image/png">
+
     <!-- 引入自定义样式 (模块化) -->
     <link rel="stylesheet" href="styles/base.css">
     <link rel="stylesheet" href="styles/layout.css">
@@ -80,42 +83,93 @@
                 <div class="setting-item">
                     <label for="api-key-input">AI 模型密钥 (Aliyun Qwen)</label>
                     <p class="setting-desc">输入 Key 以启用深度解牌功能，留空则使用模拟数据。</p>
-                    <input type="password" id="api-key-input" placeholder="sk-xxxxxxxxxxxxxxxx">
+                    <input type="password" id="api-key-input" placeholder="sk-affb2f48526b4aa38cadfd3004646fcc">
                 </div>
 
                 <div class="setting-item">
-                    <label>关于我们</label>
-                    <p class="setting-desc">Arcana Gestura v1.0.0 - 基于 WebGazer 与 Three.js 构建。 &copy; rainbow_yu</p>
+                    <label>关于我</label>
+                    <p class="setting-desc">Arcana Gestura v1.1.0 - 基于 WebGazer 与 Three.js 构建。 &copy; rainbow_yu</p>
                 </div>
             </div>
         </div>
 
-        <!-- 帮助模态框 -->
+        <!-- 帮助模态框 (重构为 新手引导/帮助 混合模式) -->
         <div id="help-modal" class="modal-backdrop">
             <div class="modal-content">
                 <span id="close-help" class="close-modal">&times;</span>
-                <h2>操作指南</h2>
-                <div class="help-item">
-                    <span class="icon">👋</span>
-                    <div>
-                        <h3>浏览卡牌</h3>
-                        <p>举起一只手，在摄像头前移动，光标会跟随你的手掌移动。</p>
+
+                <h2 style="margin-bottom: 20px;">仪式指引</h2>
+
+                <div class="tutorial-container">
+
+                    <!-- ... (步骤 1, 2, 3 的 HTML 内容完全保持不变) ... -->
+                    <!-- 步骤 1: 距离 -->
+                    <div class="tutorial-step active" data-step="1">
+                        <div class="demo-stage">
+                            <div class="cam-icon"></div>
+                            <div class="face-icon"></div>
+                            <div style="position:absolute; bottom:10px; font-size:12px; color:#aaa;">50cm - 80cm</div>
+                        </div>
+                        <h3>1. 保持合适距离</h3>
+                        <p style="color:#ccc; font-size:14px; margin-bottom:10px;">
+                            请确保您的上半身出现在摄像头画面中。<br>
+                            距离屏幕约一臂距离效果最佳。
+                        </p>
+                    </div>
+
+                    <!-- 步骤 2: 移动 -->
+                    <div class="tutorial-step" data-step="2">
+                        <div class="demo-stage">
+                            <div class="cursor-target"></div>
+                            <div class="cursor-dot"></div>
+                            <div class="hand-icon anim-move"></div>
+                        </div>
+                        <h3>2. 控制光标</h3>
+                        <p style="color:#ccc; font-size:14px; margin-bottom:10px;">
+                            举起单手，光标会跟随您的掌心移动。<br>
+                            移动手掌以浏览不同的卡牌。
+                        </p>
+                    </div>
+
+                    <!-- 步骤 3: 捏合 -->
+                    <div class="tutorial-step" data-step="3">
+                        <div class="demo-stage">
+                            <div class="pinch-hand">
+                                <div class="pinch-palm"></div>
+                                <div class="finger-thumb"></div>
+                                <div class="finger-index"></div>
+                                <div class="pinch-ring"></div>
+                            </div>
+                        </div>
+                        <h3>3. 确认选择</h3>
+                        <p style="color:#ccc; font-size:14px; margin-bottom:10px;">
+                            将光标对准卡牌，<b>捏合食指与拇指</b>。<br>
+                            保持捏合状态约 0.5 秒即可翻开卡牌。
+                        </p>
+                    </div>
+
+                    <!-- 导航点 -->
+                    <div class="step-indicators">
+                        <span class="dot active"></span>
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                    </div>
+
+                    <!-- 控制区域 (修改结构) -->
+                    <div class="tutorial-controls">
+                        <!-- 新增：不再提示复选框 -->
+                        <label class="dont-show-label">
+                            <input type="checkbox" id="tut-checkbox">
+                            <span>不再自动提示</span>
+                        </label>
+
+                        <div class="tut-btns">
+                            <button id="tut-skip" class="btn-secondary">跳过</button>
+                            <button id="tut-next" class="btn-primary">下一步</button>
+                        </div>
                     </div>
                 </div>
-                <div class="help-item">
-                    <span class="icon">🤏</span>
-                    <div>
-                        <h3>选择命运</h3>
-                        <p>将光标对准心仪的卡牌，<b>捏合食指与拇指</b>并保持 0.5 秒即可选中。</p>
-                    </div>
-                </div>
-                <div class="help-item">
-                    <span class="icon">🤛</span>
-                    <div>
-                        <h3>重置仪式</h3>
-                        <p>在解牌结束后，<b>握拳</b>并保持 1.5 秒，即可重新开始。</p>
-                    </div>
-                </div>
+
             </div>
         </div>
 

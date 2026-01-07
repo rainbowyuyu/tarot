@@ -1,6 +1,10 @@
 import { STATE } from './globals.js';
 import { ui } from './ui.js';
 
+// 【在此处填写你的默认 API Key】
+// 如果页面设置中没填，系统会自动使用这个 Key
+const DEFAULT_API_KEY = "sk-affb2f48526b4aa38cadfd3004646fcc";
+
 export async function fetchInterpretation() {
     // 1. 构建更具宿命感的时间流描述
     const cardsDesc = STATE.selectedCards.map((c, i) => {
@@ -38,8 +42,12 @@ ${cardsDesc}
 2. **真言护符**：一句简短有力的格言，作为某种精神力量的加持。）
 `;
 
-    // 模拟模式（无 Key 时）
-    if (!STATE.apiKey) {
+    // 3. 获取有效的 API Key (优先使用页面设置的，如果没有，则使用默认的)
+    const effectiveApiKey = STATE.apiKey || DEFAULT_API_KEY;
+
+    // 模拟模式（无 Key 且无默认 Key 时）
+    // 注意：这里的判断条件改成了 !effectiveApiKey
+    if (!effectiveApiKey || effectiveApiKey.includes("sk-xxxx")) {
         const mockText = `**🔮 模拟星灵连接模式（未检测到 API Key）**\n\n> *星辰正在归位，命运的迷雾逐渐散开...*\n\n${cardsDesc}\n\n此处应由 Qwen 大模型生成约 800 字的深度解析。请在左下角输入 Key 以体验完整功能。\n\n---\n\n### 🌌 星灵共鸣\n\n我感受到一股强烈的波动正在穿越你的生命力场。这三张牌的组合如同暴风雨前的宁静，暗示着你正处于一个巨大的能量转换节点。牌面中【${STATE.selectedCards[0]?.name}】的出现，说明旧的循环已经让你感到疲惫不堪...\n\n### 🔮 终局预言\n\n在接下来的 45 天内，一个意想不到的消息将打破目前的僵局...`;
         streamText(mockText);
         return;
@@ -49,7 +57,8 @@ ${cardsDesc}
         const response = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${STATE.apiKey}`,
+                // 使用有效的 Key
+                "Authorization": `Bearer ${effectiveApiKey}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
@@ -86,30 +95,20 @@ ${cardsDesc}
                         const content = json.choices[0].delta.content || "";
                         fullText += content;
 
-                        // --- 核心修改：渲染 Markdown 并追加光标 ---
-                        // 1. 解析 Markdown
+                        // 实时渲染 Markdown 并追加光标
                         let htmlContent = marked.parse(fullText);
-
-                        // 2. 追加闪烁光标 (Span 带有动画类)
                         htmlContent += '<span class="typing-cursor"></span>';
-
-                        // 3. 更新 UI
                         ui.aiText.innerHTML = htmlContent;
 
-                        // 4. 平滑滚动到底部
                         const contentDiv = document.getElementById('result-content');
                         if(contentDiv) {
-                            // 使用 scrollTo 配合 behavior: smooth 会更优雅，但在高频流式输出时直接设置 scrollTop 性能更好且不抖动
                             contentDiv.scrollTop = contentDiv.scrollHeight;
                         }
-
                     } catch (e) { }
                 }
             }
         }
 
-        // --- 循环结束后 ---
-        // 移除光标，表示生成结束
         ui.aiText.innerHTML = marked.parse(fullText);
 
     } catch (error) {
