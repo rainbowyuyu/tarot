@@ -131,32 +131,26 @@ function revealCards() {
     setTimeout(showResultPanel, 3500);
 }
 
-// --- 核心修改：在结果面板显示卡牌预览图 ---
 function showResultPanel() {
     ui.result.style.opacity = 1;
     ui.result.style.pointerEvents = "auto";
     ui.aiText.innerHTML = "正在连接星灵...";
 
-    // 清空现有内容
     ui.revealCont.innerHTML = "";
 
-    // 遍历选中的卡牌生成预览
     STATE.selectedCards.forEach(c => {
         const cardContainer = document.createElement('div');
         cardContainer.className = 'ui-card-wrapper';
 
-        // 1. 生成 Canvas 图片
         const cardCanvas = createCardCanvas(c.name);
         const img = document.createElement('img');
         img.src = cardCanvas.toDataURL();
         img.className = 'ui-card-img';
 
-        // 2. 如果是逆位，在 UI 上旋转图片
         if (c.orientation === "逆位") {
             img.style.transform = "rotate(180deg)";
         }
 
-        // 3. 标签
         const label = document.createElement('div');
         label.className = 'ui-card-label';
         label.innerText = `${c.name.split('(')[0]} (${c.orientation})`;
@@ -193,7 +187,6 @@ function resetGame() {
     }, 1500);
 }
 
-// --- 物理更新与交互循环 ---
 function updatePhysics() {
     const time = Date.now() * 0.001;
     starField.rotation.y = time * 0.02;
@@ -202,7 +195,6 @@ function updatePhysics() {
         STATE.cooldown -= 16;
     }
 
-    // 牌组跟随手势的缓动效果
     if (STATE.phase === 'selecting') {
         const targetDeckPosX = -STATE.handPos.x * 75;
         deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * 0.08;
@@ -216,8 +208,7 @@ function updatePhysics() {
         deckGroup.rotation.z += (STATE.handPos.x * 0.1 - deckGroup.rotation.z) * 0.05;
     }
 
-    // 准星移动逻辑
-    const sensitivity = isMobile ? 3.0 : 2.5; // 移动端稍微提高灵敏度
+    const sensitivity = isMobile ? 3.0 : 2.5;
     const ndcX = Math.max(-1, Math.min(1, STATE.handPos.x * sensitivity));
     const ndcY = Math.max(-1, Math.min(1, STATE.handPos.y * sensitivity));
 
@@ -230,7 +221,6 @@ function updatePhysics() {
     pointLight.position.copy(reticle.position);
     pointLight.position.z += 1;
 
-    // 射线检测
     raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
     const intersects = raycaster.intersectObjects(deckGroup.children, true);
 
@@ -244,7 +234,6 @@ function updatePhysics() {
 
     const absoluteFaceCameraRot = -deckGroup.rotation.y;
 
-    // 准星状态变量
     let reticleScale = 1.0;
     let reticleCoreScale = 0.0;
     let reticleRotSpeed = 1.0;
@@ -272,13 +261,12 @@ function updatePhysics() {
                 ui.progCont.style.display = 'block';
                 ui.progress.style.width = `${progress * 100}%`;
 
-                // 准星动态反馈
                 reticleScale = 1.0 - (progress * 0.4);
                 reticleCoreScale = progress;
                 reticleRotSpeed = 5.0 + (progress * 10.0);
                 reticleColor = 0x00ffff;
 
-                c.position.x = c.userData.originalPos.x + (Math.random()-0.5) * 0.05; // 震动反馈
+                c.position.x = c.userData.originalPos.x + (Math.random()-0.5) * 0.05;
 
                 if (progress >= 1.0) confirmSelection(c);
             } else {
@@ -311,7 +299,6 @@ function updatePhysics() {
         reticleCoreScale = 0.0;
     }
 
-    // 更新准星动画
     reticleOuter.scale.lerp(new THREE.Vector3(reticleScale, reticleScale, 1), 0.2);
     reticleCore.scale.lerp(new THREE.Vector3(reticleCoreScale, reticleCoreScale, 1), 0.2);
     reticleOuter.rotation.z -= time * 0.05 * reticleRotSpeed;
@@ -323,7 +310,6 @@ function updatePhysics() {
     }
 }
 
-// 握拳检测逻辑
 function isHandFist(landmarks) {
     const wrist = landmarks[0];
     const tips = [8, 12, 16, 20];
@@ -338,17 +324,15 @@ function isHandFist(landmarks) {
 // --- MediaPipe 与摄像头初始化 ---
 
 const videoElement = document.getElementById('input_video');
-// 关键优化：为微信和iOS添加强制内联播放属性，防止全屏或黑屏
 videoElement.setAttribute('playsinline', 'true');
 videoElement.setAttribute('webkit-playsinline', 'true');
-videoElement.setAttribute('muted', 'true'); // 必须静音才能在很多移动浏览器自动播放
+videoElement.setAttribute('muted', 'true');
 
 const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
 
-// 针对移动端的 MediaPipe 优化
 hands.setOptions({
-    maxNumHands: isMobile ? 1 : 2,      // 移动端只追踪一只手，提升性能
-    modelComplexity: isMobile ? 0 : 1,  // 0:Lite (快), 1:Full (准)。移动端选 Lite
+    maxNumHands: isMobile ? 1 : 2,
+    modelComplexity: isMobile ? 0 : 1, // 0:Lite (快), 1:Full (准)
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
 });
@@ -358,19 +342,15 @@ hands.onResults((results) => {
         STATE.handDetected = true;
 
         const landmarks = results.multiHandLandmarks[0];
-        // 坐标转换：MediaPipe 坐标系 -> 屏幕 NDC 坐标
         const x = (1 - landmarks[9].x) * 2 - 1;
         const y = -(landmarks[9].y * 2 - 1);
 
-        // 平滑移动
         STATE.handPos.x += (x - STATE.handPos.x) * 0.2;
         STATE.handPos.y += (y - STATE.handPos.y) * 0.2;
 
-        // 捏合检测
         const dist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
         STATE.isPinching = dist < CONFIG.pinchDist;
 
-        // 重置手势检测 (仅在结果页)
         let isResetGesture = false;
         if (STATE.phase === 'result') {
             if (isHandFist(landmarks)) isResetGesture = true;
@@ -396,25 +376,21 @@ hands.onResults((results) => {
     }
 });
 
-// 使用 Camera Utils，但配置更灵活
+// 【修复】Camera 初始化逻辑优化
+// 移动端请求标准的 VGA 4:3 分辨率，避免 360宽 导致的 OverconstrainedError
 const cameraUtils = new Camera(videoElement, {
   onFrame: async () => { await hands.send({image: videoElement}); },
-  // 关键优化：根据设备类型请求分辨率
-  // 移动端请求 360x640 (竖屏) 以减少计算量，电脑端请求 1280x720 (横屏)
-  width: isMobile ? 360 : 1280,
+  width: isMobile ? 480 : 1280,
   height: isMobile ? 640 : 720,
-  facingMode: 'user' // 强制前置摄像头
+  facingMode: 'user'
 });
 
-// 绑定启动按钮
 ui.startBtn.addEventListener('click', () => {
-    // 检查 HTTPS (MediaPipe/摄像头必须)
     if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
         alert("安全警告：请在 HTTPS 环境下运行本应用，否则无法打开摄像头。");
         return;
     }
 
-    // 检查浏览器支持
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         alert("您的浏览器不支持摄像头访问，请使用 Chrome/Safari 或微信内置浏览器。");
         return;
@@ -422,23 +398,42 @@ ui.startBtn.addEventListener('click', () => {
 
     ui.loader.style.display = 'none';
 
-    // 启动摄像头
     cameraUtils.start().catch(err => {
         console.error("摄像头启动失败:", err);
-        alert(`无法访问摄像头：${err.name}。请检查权限设置。`);
+        // 尝试降级启动（不指定分辨率）
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+            .then(stream => {
+                videoElement.srcObject = stream;
+                videoElement.play();
+                // 手动启动循环
+                const loop = async () => {
+                    await hands.send({image: videoElement});
+                    requestAnimationFrame(loop);
+                };
+                loop();
+            })
+            .catch(e => {
+                alert(`无法访问摄像头：${err.name}。请确保已授权。`);
+                ui.loader.style.display = 'flex'; // 恢复显示 loading 方便重试
+            });
     });
 });
 
-window.onload = () => {
-    // 模拟资源加载
-    setTimeout(() => {
-        ui.spinner.style.display = 'none';
-        ui.loaderText.innerText = "系统就绪";
-        ui.startBtn.style.display = 'block';
-    }, 1000);
+// 【修复】初始化兜底逻辑：防止微信内 onload 不触发导致永远卡在 Loading
+const initSystem = () => {
+    ui.spinner.style.display = 'none';
+    ui.loaderText.innerText = "系统就绪";
+    ui.startBtn.style.display = 'block';
 };
 
-// 渲染循环
+if (document.readyState === 'complete') {
+    initSystem();
+} else {
+    window.addEventListener('load', initSystem);
+    // 3秒后强制显示，防止资源加载阻塞
+    setTimeout(initSystem, 3000);
+}
+
 function animate() {
     requestAnimationFrame(animate);
     updatePhysics();
