@@ -187,6 +187,7 @@ function resetGame() {
     }, 1500);
 }
 
+// --- 物理更新与交互循环 ---
 function updatePhysics() {
     const time = Date.now() * 0.001;
     starField.rotation.y = time * 0.02;
@@ -324,6 +325,7 @@ function isHandFist(landmarks) {
 // --- MediaPipe 与摄像头初始化 ---
 
 const videoElement = document.getElementById('input_video');
+// 关键优化：为微信和iOS添加强制内联播放属性，防止全屏或黑屏
 videoElement.setAttribute('playsinline', 'true');
 videoElement.setAttribute('webkit-playsinline', 'true');
 videoElement.setAttribute('muted', 'true');
@@ -376,7 +378,7 @@ hands.onResults((results) => {
     }
 });
 
-// 【修复】Camera 初始化逻辑优化
+// 【关键修复】Camera 初始化逻辑
 // 移动端请求标准的 VGA 4:3 分辨率，避免 360宽 导致的 OverconstrainedError
 const cameraUtils = new Camera(videoElement, {
   onFrame: async () => { await hands.send({image: videoElement}); },
@@ -419,7 +421,7 @@ ui.startBtn.addEventListener('click', () => {
     });
 });
 
-// 【修复】初始化兜底逻辑：防止微信内 onload 不触发导致永远卡在 Loading
+// 【关键修复】初始化兜底逻辑：防止微信内 onload 不触发导致永远卡在 Loading
 const initSystem = () => {
     ui.spinner.style.display = 'none';
     ui.loaderText.innerText = "系统就绪";

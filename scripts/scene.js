@@ -8,10 +8,13 @@ export const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window
 camera.position.set(0, 1, 14);
 camera.lookAt(0, 0, 0);
 
+// 检测移动端
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 export const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-// 移动端限制像素比，防止高分屏手机发热卡顿
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// 电脑端保持高画质，移动端限制为 2 倍或 1.5 倍以提升性能
+renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 2) : window.devicePixelRatio);
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
@@ -26,8 +29,10 @@ scene.add(ambientLight);
 const mainLight = new THREE.DirectionalLight(0xffeebb, 1.0);
 mainLight.position.set(5, 12, 18);
 mainLight.castShadow = true;
-mainLight.shadow.mapSize.width = 1024;
-mainLight.shadow.mapSize.height = 1024;
+// 移动端降低阴影贴图大小
+const shadowSize = isMobile ? 512 : 1024;
+mainLight.shadow.mapSize.width = shadowSize;
+mainLight.shadow.mapSize.height = shadowSize;
 mainLight.shadow.bias = -0.0001;
 scene.add(mainLight);
 
@@ -60,12 +65,9 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
     ctx.stroke();
 }
 
-// 检测是否为移动设备 (用于调整纹理质量)
-const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
 // --- 卡背纹理生成 ---
 function createCardBackTexture() {
-    // 【修复】使用 512x1024 (2的幂次方) 解决微信/移动端纹理黑屏或不加载的问题
+    // 【关键修复】使用 512x1024 (2的幂次方) 解决微信/移动端纹理黑屏
     const width = 512;
     const height = 1024;
 
@@ -80,8 +82,9 @@ function createCardBackTexture() {
     ctx.fillStyle = deepPurple;
     ctx.fillRect(0, 0, width, height);
 
-    // 减少粒子数量优化性能
-    for (let i = 0; i < 8000; i++) {
+    // 移动端减少粒子数量
+    const particleCount = isMobile ? 3000 : 8000;
+    for (let i = 0; i < particleCount; i++) {
         ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.04})`;
         const x = Math.random() * width;
         const y = Math.random() * height;
@@ -109,7 +112,7 @@ function createCardBackTexture() {
 
     ctx.strokeStyle = goldColor;
     ctx.lineWidth = 8;
-    // 使用变量 height 而不是硬编码
+    // 使用动态 height
     drawRoundedRect(ctx, 20, 20, width - 40, height - 40, 25);
     ctx.lineWidth = 2;
     drawRoundedRect(ctx, 32, 32, width - 64, height - 64, 15);
@@ -152,21 +155,20 @@ function createCardBackTexture() {
         ctx.globalCompositeOperation = 'source-over';
         ctx.restore();
     }
-    // 调整月亮位置以适应新的高度
+    // 调整位置适配新高度
     drawCrescent(cx, 150, 40, Math.PI/2);
     drawCrescent(cx, height - 150, 40, -Math.PI/2);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.encoding = THREE.sRGBEncoding;
-    // 【修复】移动端如果开启最大各向异性过滤可能会黑屏，设为 1 最安全
+    // 【关键修复】移动端开启高各向异性过滤会导致渲染错误，设为 1 最安全
     tex.anisotropy = isMobile ? 1 : renderer.capabilities.getMaxAnisotropy();
-    tex.needsUpdate = true; // 强制更新
+    tex.needsUpdate = true;
     return tex;
 }
 
 // --- 材质定义 ---
 const proceduralBackTex = createCardBackTexture();
-
 
 const cardBackMat = new THREE.MeshStandardMaterial({
     map: proceduralBackTex,
@@ -193,9 +195,9 @@ export const cards = [];
 export const deckGroup = new THREE.Group();
 scene.add(deckGroup);
 
-// --- 3. 核心修改：独立的 Canvas 生成函数 (UI 和 3D 共用) ---
+// --- 卡面 Canvas 生成 (修复尺寸) ---
 export function createCardCanvas(name) {
-    // 【修复】同样使用 512x1024 尺寸
+    // 【关键修复】同样使用 512x1024 尺寸
     const width = 512;
     const height = 1024;
 
@@ -204,17 +206,17 @@ export function createCardCanvas(name) {
     canvas.height = height;
     const ctx = canvas.getContext('2d');
 
-    // 绘制卡面背景
+    // 背景
     ctx.fillStyle = '#f5e6d3';
     ctx.fillRect(0, 0, width, height);
 
     // 噪点
-    for(let i=0; i<2000; i++) {
+    for(let i=0; i<1500; i++) {
         ctx.fillStyle = `rgba(0,0,0,${Math.random()*0.06})`;
         ctx.fillRect(Math.random()*width, Math.random()*height, 2, 2);
     }
 
-    // 边框 (使用动态 height)
+    // 边框 (适配动态 height)
     ctx.strokeStyle = '#cba135';
     ctx.lineWidth = 18;
     drawRoundedRect(ctx, 15, 15, width - 30, height - 30, 20);
@@ -222,21 +224,20 @@ export function createCardCanvas(name) {
     drawRoundedRect(ctx, 30, 30, width - 60, height - 60, 10);
 
     // 内容框
-    const contentHeight = height - 320; // 动态计算内容区高度
+    const contentHeight = height - 320;
     ctx.fillStyle = '#f0eadd';
     ctx.fillRect(50, 50, 412, contentHeight);
     ctx.strokeStyle = '#aa9977';
     ctx.lineWidth = 1;
     ctx.strokeRect(50, 50, 412, contentHeight);
 
-    // 绘制图案 (位置居中调整)
+    // 绘制图案 (居中)
     const id = TAROT_DATA.indexOf(name);
     if (id !== -1) {
-        // centerY 稍微下移一点以适应更长的画布
         drawArcanaSymbol(ctx, 256, 50 + contentHeight/2, id);
     }
 
-    // 文字 (位置调整到底部)
+    // 文字 (调整到底部)
     ctx.fillStyle = '#111';
     ctx.font = 'bold 38px "Cinzel", serif';
     ctx.textAlign = 'center';
@@ -253,7 +254,7 @@ export function createCardCanvas(name) {
     return canvas;
 }
 
-// 动态生成卡面材质 (调用上面的函数)
+// 动态生成卡面材质
 export function getCardFrontMaterial(name) {
     const canvas = createCardCanvas(name);
     const tex = new THREE.CanvasTexture(canvas);
@@ -302,7 +303,7 @@ const sharedGeometries = (function() {
     for (let i = 0; i < posAttribute.count; i++) {
         const x = posAttribute.getX(i);
         const y = posAttribute.getY(i);
-        // UV 映射需要考虑新的纹理比例，但只要纹理是铺满的，这里保持 0-1 即可
+        // UV 映射适配 (宽不变，高自适应)
         const u = (x + width / 2) / width;
         const v = (y + height / 2) / height;
         uvAttribute.setXY(i, u, v);
@@ -384,7 +385,7 @@ reticleCore.scale.set(0, 0, 0);
 reticle.add(reticleCore);
 
 const starGeo = new THREE.BufferGeometry();
-const starCount = isMobile ? 500 : 1000; // 进一步减少移动端粒子
+const starCount = isMobile ? 500 : 1000; // 移动端减少粒子
 const posArray = new Float32Array(starCount * 3);
 for(let i=0; i<starCount*3; i++) {
     posArray[i] = (Math.random() - 0.5) * 60;
