@@ -334,7 +334,37 @@ function createCardBackTexture() {
 }
 
 // --- 卡面 Canvas 生成 (保持原样或微调) ---
-// --- 新的卡面生成逻辑 ---
+// --- 核心修改：导出这个绘制函数 ---
+// 这是一个通用的绘制器，既可以用于 3D 纹理，也可以用于 2D UI
+export function updateCanvasContent(ctx, width, height, name, time) {
+    // 1. 清除画布
+    ctx.clearRect(0, 0, width, height);
+
+    // 2. 绘制底色
+    ctx.fillStyle = '#f3e5d0';
+    ctx.fillRect(0, 0, width, height);
+
+    // 3. 绘制具体卡牌内容 (带裁剪)
+    const drawer = getDrawer(name);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(40, 40, width - 80, height - 80);
+    ctx.clip();
+
+    // 执行具体绘制 (传递时间参数实现动画)
+    drawer(ctx, width, height, time);
+    ctx.restore();
+
+    // 4. 绘制统一的华丽金边
+    setGoldStroke(ctx, width, height, 15);
+    drawRoundedRect(ctx, 20, 20, width - 40, height - 40, 20);
+
+    setGoldStroke(ctx, width, height, 5);
+    drawRoundedRect(ctx, 35, 35, width - 70, height - 70, 10);
+}
+
+// --- 卡面 Canvas 生成 ---
 export function createCardCanvas(name, time = 0) {
     const width = 512;
     const height = 1024;
@@ -343,50 +373,33 @@ export function createCardCanvas(name, time = 0) {
     canvas.height = height;
     const ctx = canvas.getContext('2d');
 
-    // 1. 绘制边框 (通用)
-    ctx.fillStyle = '#f3e5d0'; // 羊皮纸底色
-    ctx.fillRect(0, 0, width, height);
-
-    // 2. 调用具体的卡牌绘制逻辑
-    const drawer = getDrawer(name);
-
-    // 创建一个裁剪区域用于绘制卡面内容 (不覆盖边框)
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(40, 40, width - 80, height - 80);
-    ctx.clip();
-
-    // 执行绘制 (传入 time)
-    drawer(ctx, width, height, time);
-    ctx.restore();
-
-    // 3. 绘制统一的华丽金边
-    setGoldStroke(ctx, width, height, 15);
-    drawRoundedRect(ctx, 20, 20, width - 40, height - 40, 20);
-    setGoldStroke(ctx, width, height, 5);
-    drawRoundedRect(ctx, 35, 35, width - 70, height - 70, 10);
+    updateCanvasContent(ctx, width, height, name, time);
 
     return canvas;
 }
 
 export function getCardFrontMaterial(name) {
-    // 初始生成 (time = 0)
     const canvas = createCardCanvas(name, 0);
     const tex = new THREE.CanvasTexture(canvas);
     tex.encoding = THREE.sRGBEncoding;
-    tex.anisotropy = isMobile ? 1 : renderer.capabilities.getMaxAnisotropy();
+
+    if (!isMobile) {
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    }
 
     const mat = new THREE.MeshStandardMaterial({
         map: tex,
         roughness: 0.5,
-        metalness: 0.1
+        metalness: 0.1,
+        emissive: 0x000000
     });
 
-    // 将 canvas 和 name 存入 userData，以便后续更新动画
-    mat.userData.cardName = name;
-    mat.userData.canvas = canvas;
-    mat.userData.ctx = canvas.getContext('2d');
-    mat.userData.texture = tex;
+    mat.userData = {
+        cardName: name,
+        canvas: canvas,
+        ctx: canvas.getContext('2d'),
+        texture: tex
+    };
 
     return mat;
 }
@@ -415,42 +428,11 @@ export const cardFrontBaseMat = new THREE.MeshStandardMaterial({
     metalness: 0.1
 });
 
-// --- 动画更新逻辑 ---
-// 警告：不要对所有卡牌调用此函数！只对“特写”状态的卡牌调用！
+// 3D 卡牌动画更新接口
 export function animateCardFace(material, time) {
-    if (!material.userData.ctx) return;
-
+    if (!material || !material.userData || !material.userData.ctx) return;
     const { cardName, canvas, ctx, texture } = material.userData;
-    const width = canvas.width;
-    const height = canvas.height;
-
-    // 清空并重绘
-    ctx.clearRect(0, 0, width, height);
-
-    // 重新生成 Canvas 内容
-    // 注意：这里我们重新运行 createCardCanvas 的逻辑，但为了性能最好提取出来
-    // 简便起见，这里直接复用绘图逻辑
-
-    // 1. 底色
-    ctx.fillStyle = '#f3e5d0';
-    ctx.fillRect(0, 0, width, height);
-
-    // 2. 内容
-    const drawer = getDrawer(cardName);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(40, 40, width - 80, height - 80);
-    ctx.clip();
-    drawer(ctx, width, height, time);
-    ctx.restore();
-
-    // 3. 边框
-    setGoldStroke(ctx, width, height, 15);
-    drawRoundedRect(ctx, 20, 20, width - 40, height - 40, 20);
-    setGoldStroke(ctx, width, height, 5);
-    drawRoundedRect(ctx, 35, 35, width - 70, height - 70, 10);
-
-    // 标记纹理更新
+    updateCanvasContent(ctx, canvas.width, canvas.height, cardName, time);
     texture.needsUpdate = true;
 }
 

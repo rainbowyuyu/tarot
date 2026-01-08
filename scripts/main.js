@@ -5,13 +5,16 @@ import { ui } from './ui.js';
 import { scene, camera, renderer, deckGroup, cards, reticle, reticleOuter, reticleCore, pointLight, starField, initDeck } from './scene.js';
 import { fetchInterpretation } from './api.js';
 // 确保路径正确指向 materials.js
-import { updateCardMaterials, animateCardFace, getCardFrontMaterial, createCardCanvas } from './scene/materials.js';
+import { updateCardMaterials, animateCardFace, getCardFrontMaterial, createCardCanvas, updateCanvasContent } from './scene/materials.js';
 
 const raycaster = new THREE.Raycaster();
 
 // --- 设备环境检测 ---
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+
+// 扩展 STATE，用于存储结果页的 Canvas 引用以便动画更新
+STATE.uiResultCanvases = [];
 
 // 动画函数
 function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
@@ -53,7 +56,7 @@ function confirmSelection(cardGroup) {
     const isReversed = Math.random() > 0.5;
     const cardInfo = {
         mesh: cardGroup,
-        name: cardGroup.userData.name,
+        name: cardGroup.userData.name, // 这里获取的是 initDeck 洗牌后的随机名字
         orientation: isReversed ? "逆位" : "正位"
     };
     STATE.selectedCards.push(cardInfo);
@@ -136,26 +139,36 @@ function showResultPanel() {
     ui.result.style.pointerEvents = "auto";
     ui.aiText.innerHTML = "正在连接星灵...";
     ui.revealCont.innerHTML = "";
+    STATE.uiResultCanvases = []; // 清空之前的记录
 
     STATE.selectedCards.forEach(c => {
         const cardContainer = document.createElement('div');
         cardContainer.className = 'ui-card-wrapper';
 
-        // 生成静态预览图 (time=0)
+        // --- 核心修改：使用 Canvas 代替 Img ---
+        // 1. 创建 Canvas
         const cardCanvas = createCardCanvas(c.name, 0);
-        const img = document.createElement('img');
-        img.src = cardCanvas.toDataURL();
-        img.className = 'ui-card-img';
+        cardCanvas.className = 'ui-card-img'; // 复用之前的 CSS 类名以保持样式
 
+        // 2. 处理逆位旋转
         if (c.orientation === "逆位") {
-            img.style.transform = "rotate(180deg)";
+            cardCanvas.style.transform = "rotate(180deg)";
         }
+
+        // 3. 将 Canvas 信息存入全局状态，以便在 animate 循环中更新
+        STATE.uiResultCanvases.push({
+            canvas: cardCanvas,
+            ctx: cardCanvas.getContext('2d'),
+            name: c.name
+        });
 
         const label = document.createElement('div');
         label.className = 'ui-card-label';
-        label.innerText = `${c.name.split('(')[0]} (${c.orientation})`;
+        // 简化名字显示
+        const simpleName = c.name.match(/\((.*?)\)/) ? c.name.match(/\((.*?)\)/)[1] : c.name;
+        label.innerText = `${simpleName} (${c.orientation})`;
 
-        cardContainer.appendChild(img);
+        cardContainer.appendChild(cardCanvas); // 直接插入 Canvas
         cardContainer.appendChild(label);
         ui.revealCont.appendChild(cardContainer);
     });
@@ -468,20 +481,28 @@ if (document.readyState === 'complete') {
     setTimeout(initSystem, 3000); // 超时强制显示
 }
 
+// --- 核心动画循环 ---
 function animate() {
     requestAnimationFrame(animate);
     const time = Date.now() * 0.001;
 
     updatePhysics();
 
-    // 2. 更新选中卡牌的卡面动画 (仅在展示阶段)
-    if (STATE.phase === 'result' && STATE.selectedCards.length > 0) {
+    // A. 更新 3D 场景中选中卡牌的材质动画 (特写/揭示阶段)
+    if (STATE.phase === 'result' || STATE.phase === 'revealing') {
         STATE.selectedCards.forEach(c => {
-            // c.mesh.children[2] 是正面 Mesh
             if (c.mesh && c.mesh.children[2]) {
                 const mat = c.mesh.children[2].material;
                 animateCardFace(mat, time);
             }
+        });
+    }
+
+    // B. 更新 DOM 结果展示中的 Canvas 动画
+    // 这是让右侧/结果面板中的卡片动起来的关键
+    if (STATE.phase === 'result' && STATE.uiResultCanvases.length > 0) {
+        STATE.uiResultCanvases.forEach(item => {
+            updateCanvasContent(item.ctx, item.canvas.width, item.canvas.height, item.name, time);
         });
     }
 
