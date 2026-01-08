@@ -1,8 +1,11 @@
+// --- START OF FILE main.js ---
+
 import { CONFIG, STATE } from './globals.js';
 import { ui } from './ui.js';
-import { scene, camera, renderer, deckGroup, cards, reticle, reticleOuter, reticleCore, pointLight, starField, initDeck, getCardFrontMaterial, createCardCanvas } from './scene.js';
+import { scene, camera, renderer, deckGroup, cards, reticle, reticleOuter, reticleCore, pointLight, starField, initDeck } from './scene.js';
 import { fetchInterpretation } from './api.js';
-
+// 确保路径正确指向 materials.js
+import { updateCardMaterials, animateCardFace, getCardFrontMaterial, createCardCanvas } from './scene/materials.js';
 
 const raycaster = new THREE.Raycaster();
 
@@ -10,7 +13,7 @@ const raycaster = new THREE.Raycaster();
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
 
-// 动画函数 (保持不变)
+// 动画函数
 function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     const startPos = obj.position.clone();
     const startRot = obj.rotation.clone();
@@ -20,15 +23,12 @@ function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     function loop() {
         t += 16 / duration;
         if (t > 1) t = 1;
-
         const ease = t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 
         obj.position.lerpVectors(startPos, new THREE.Vector3(pos.x, pos.y, pos.z), ease);
-
         obj.rotation.x = startRot.x + (rot.x - startRot.x) * ease;
         obj.rotation.y = startRot.y + (rot.y - startRot.y) * ease;
         obj.rotation.z = startRot.z + (rot.z - startRot.z) * ease;
-
         obj.scale.set(
             startScale.x + (scale.x - startScale.x) * ease,
             startScale.y + (scale.y - startScale.y) * ease,
@@ -40,7 +40,7 @@ function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     loop();
 }
 
-// --- 游戏逻辑 (选牌、揭牌、结果展示) ---
+// --- 游戏逻辑 ---
 
 function confirmSelection(cardGroup) {
     if (STATE.selectedCards.length >= 3) return;
@@ -71,7 +71,6 @@ function confirmSelection(cardGroup) {
     const euler = new THREE.Euler().setFromQuaternion(worldRot);
     cardGroup.rotation.copy(euler);
 
-    // 底部等待位置
     const slotIndex = STATE.selectedCards.length - 1;
     const targetX = (slotIndex - 1) * 3.0;
     const targetY = -2.5;
@@ -108,7 +107,7 @@ function revealCards() {
     STATE.selectedCards.forEach((c, index) => {
         setTimeout(() => {
             const newMaterial = getCardFrontMaterial(c.name);
-            const frontMesh = c.mesh.children[2];
+            const frontMesh = c.mesh.children[2]; // 确保这里对应 deck.js 中的 frontMesh 索引
             frontMesh.material = newMaterial;
             frontMesh.material.needsUpdate = true;
 
@@ -136,14 +135,14 @@ function showResultPanel() {
     ui.result.style.opacity = 1;
     ui.result.style.pointerEvents = "auto";
     ui.aiText.innerHTML = "正在连接星灵...";
-
     ui.revealCont.innerHTML = "";
 
     STATE.selectedCards.forEach(c => {
         const cardContainer = document.createElement('div');
         cardContainer.className = 'ui-card-wrapper';
 
-        const cardCanvas = createCardCanvas(c.name);
+        // 生成静态预览图 (time=0)
+        const cardCanvas = createCardCanvas(c.name, 0);
         const img = document.createElement('img');
         img.src = cardCanvas.toDataURL();
         img.className = 'ui-card-img';
@@ -193,10 +192,12 @@ function updatePhysics() {
     const time = Date.now() * 0.001;
     starField.rotation.y = time * 0.02;
 
-    if (STATE.cooldown > 0) {
-        STATE.cooldown -= 16;
-    }
+    // 1. 更新卡背 Shader 动画
+    updateCardMaterials(time);
 
+    if (STATE.cooldown > 0) STATE.cooldown -= 16;
+
+    // 2. 根据手势位置移动卡组 (视差效果)
     if (STATE.phase === 'selecting') {
         const targetDeckPosX = -STATE.handPos.x * 75;
         deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * 0.08;
@@ -210,7 +211,19 @@ function updatePhysics() {
         deckGroup.rotation.z += (STATE.handPos.x * 0.1 - deckGroup.rotation.z) * 0.05;
     }
 
+    // 3. 准星控制
+    // 如果没有检测到手，隐藏准星
+    if (!STATE.handDetected) {
+        reticle.visible = false;
+        pointLight.intensity = 0; // 同时也关掉准星上的灯光
+        return; // 停止后续交互检测
+    } else {
+        reticle.visible = true;
+        pointLight.intensity = 1.2;
+    }
+
     const sensitivity = isMobile ? 3.0 : 2.5;
+    // 限制 NDC 坐标在 -1 到 1 之间
     const ndcX = Math.max(-1, Math.min(1, STATE.handPos.x * sensitivity));
     const ndcY = Math.max(-1, Math.min(1, STATE.handPos.y * sensitivity));
 
@@ -223,6 +236,7 @@ function updatePhysics() {
     pointLight.position.copy(reticle.position);
     pointLight.position.z += 1;
 
+    // 4. 射线检测
     raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
     const intersects = raycaster.intersectObjects(deckGroup.children, true);
 
@@ -235,7 +249,6 @@ function updatePhysics() {
     }
 
     const absoluteFaceCameraRot = -deckGroup.rotation.y;
-
     let reticleScale = 1.0;
     let reticleCoreScale = 0.0;
     let reticleRotSpeed = 1.0;
@@ -252,9 +265,9 @@ function updatePhysics() {
             const hoverZ = c.userData.originalPos.z + 2.0;
             c.position.z = THREE.MathUtils.lerp(c.position.z, hoverZ, 0.2);
             c.scale.setScalar(1.2);
-
             c.rotation.y = THREE.MathUtils.lerp(c.rotation.y, absoluteFaceCameraRot, 0.2);
 
+            // 捏合逻辑
             if (STATE.isPinching) {
                 if (STATE.pinchStartTime === 0) STATE.pinchStartTime = Date.now();
                 const elapsed = (Date.now() - STATE.pinchStartTime) / 1000;
@@ -263,11 +276,13 @@ function updatePhysics() {
                 ui.progCont.style.display = 'block';
                 ui.progress.style.width = `${progress * 100}%`;
 
+                // 准星反馈
                 reticleScale = 1.0 - (progress * 0.4);
                 reticleCoreScale = progress;
                 reticleRotSpeed = 5.0 + (progress * 10.0);
                 reticleColor = 0x00ffff;
 
+                // 卡牌抖动效果
                 c.position.x = c.userData.originalPos.x + (Math.random()-0.5) * 0.05;
 
                 if (progress >= 1.0) confirmSelection(c);
@@ -279,6 +294,7 @@ function updatePhysics() {
             }
 
         } else {
+            // 未悬停状态恢复
             coreMesh.material.emissive.setHex(0x221100);
             coreMesh.material.emissiveIntensity = 0.2;
 
@@ -294,6 +310,7 @@ function updatePhysics() {
         }
     });
 
+    // 准星无悬停状态
     if (!hoveredCard) {
         STATE.pinchStartTime = 0;
         ui.progCont.style.display = 'none';
@@ -301,6 +318,7 @@ function updatePhysics() {
         reticleCoreScale = 0.0;
     }
 
+    // 更新准星视觉
     reticleOuter.scale.lerp(new THREE.Vector3(reticleScale, reticleScale, 1), 0.2);
     reticleCore.scale.lerp(new THREE.Vector3(reticleCoreScale, reticleCoreScale, 1), 0.2);
     reticleOuter.rotation.z -= time * 0.05 * reticleRotSpeed;
@@ -312,6 +330,7 @@ function updatePhysics() {
     }
 }
 
+// 握拳检测 (用于重置游戏)
 function isHandFist(landmarks) {
     const wrist = landmarks[0];
     const tips = [8, 12, 16, 20];
@@ -323,13 +342,22 @@ function isHandFist(landmarks) {
     return foldedCount >= 3;
 }
 
-// --- MediaPipe 与摄像头初始化 ---
+// --- MediaPipe 初始化 ---
 
 const videoElement = document.getElementById('input_video');
-// 关键优化：为微信和iOS添加强制内联播放属性，防止全屏或黑屏
 videoElement.setAttribute('playsinline', 'true');
 videoElement.setAttribute('webkit-playsinline', 'true');
 videoElement.setAttribute('muted', 'true');
+// 隐藏视频元素，只用于识别
+videoElement.style.opacity = 0;
+videoElement.style.position = 'absolute';
+videoElement.style.zIndex = -1;
+
+// 确保 Hands 已加载 (来自 CDN)
+if (typeof Hands === 'undefined') {
+    console.error("MediaPipe Hands library not loaded. Check index.html imports.");
+    alert("系统错误：手势识别库未加载，请刷新页面。");
+}
 
 const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
 
@@ -345,15 +373,21 @@ hands.onResults((results) => {
         STATE.handDetected = true;
 
         const landmarks = results.multiHandLandmarks[0];
+        // 坐标映射：MediaPipe x(0~1) -> NDC x(-1~1)
+        // 注意：自拍模式下视频是镜像的，所以 x 需要翻转 (1 - x)
         const x = (1 - landmarks[9].x) * 2 - 1;
         const y = -(landmarks[9].y * 2 - 1);
 
-        STATE.handPos.x += (x - STATE.handPos.x) * 0.2;
-        STATE.handPos.y += (y - STATE.handPos.y) * 0.2;
+        // 平滑移动
+        STATE.handPos.x += (x - STATE.handPos.x) * 0.3; // 增加平滑系数，减少迟滞
+        STATE.handPos.y += (y - STATE.handPos.y) * 0.3;
 
+        // 捏合检测 (食指指尖 vs 拇指指尖)
         const dist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
-        STATE.isPinching = dist < CONFIG.pinchDist;
+        // 根据实际测试，pinchDist 阈值通常在 0.05 左右
+        STATE.isPinching = dist < (CONFIG.pinchDist || 0.05);
 
+        // 重置手势 (仅在结果页生效)
         let isResetGesture = false;
         if (STATE.phase === 'result') {
             if (isHandFist(landmarks)) isResetGesture = true;
@@ -369,18 +403,19 @@ hands.onResults((results) => {
             STATE.fistHoldStart = 0;
         }
 
+        // 状态流转
         if (STATE.phase === 'intro') {
             STATE.phase = 'selecting';
             ui.guide.innerHTML = `<h2>命运之选</h2><p>移动手掌浏览，捏合选择</p>`;
         }
     } else {
         STATE.handDetected = false;
+        STATE.isPinching = false;
         STATE.fistHoldStart = 0;
     }
 });
 
-// 【关键修复】Camera 初始化逻辑
-// 移动端请求标准的 VGA 4:3 分辨率，避免 360宽 导致的 OverconstrainedError
+// Camera 初始化
 const cameraUtils = new Camera(videoElement, {
   onFrame: async () => { await hands.send({image: videoElement}); },
   width: isMobile ? 480 : 1280,
@@ -394,21 +429,18 @@ ui.startBtn.addEventListener('click', () => {
         return;
     }
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("您的浏览器不支持摄像头访问，请使用 Chrome/Safari 或微信内置浏览器。");
-        return;
-    }
-
     ui.loader.style.display = 'none';
+    ui.startBtn.style.display = 'none'; // 点击后隐藏按钮
 
-    cameraUtils.start().catch(err => {
+    cameraUtils.start().then(() => {
+        console.log("Camera started");
+    }).catch(err => {
         console.error("摄像头启动失败:", err);
-        // 尝试降级启动（不指定分辨率）
+        // 降级尝试
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
             .then(stream => {
                 videoElement.srcObject = stream;
                 videoElement.play();
-                // 手动启动循环
                 const loop = async () => {
                     await hands.send({image: videoElement});
                     requestAnimationFrame(loop);
@@ -416,13 +448,13 @@ ui.startBtn.addEventListener('click', () => {
                 loop();
             })
             .catch(e => {
-                alert(`无法访问摄像头：${err.name}。请确保已授权。`);
-                ui.loader.style.display = 'flex'; // 恢复显示 loading 方便重试
+                alert(`无法访问摄像头，请检查权限设置。`);
+                ui.loader.style.display = 'flex';
+                ui.startBtn.style.display = 'block';
             });
     });
 });
 
-// 【关键修复】初始化兜底逻辑：防止微信内 onload 不触发导致永远卡在 Loading
 const initSystem = () => {
     ui.spinner.style.display = 'none';
     ui.loaderText.innerText = "系统就绪";
@@ -433,13 +465,26 @@ if (document.readyState === 'complete') {
     initSystem();
 } else {
     window.addEventListener('load', initSystem);
-    // 3秒后强制显示，防止资源加载阻塞
-    setTimeout(initSystem, 3000);
+    setTimeout(initSystem, 3000); // 超时强制显示
 }
 
 function animate() {
     requestAnimationFrame(animate);
+    const time = Date.now() * 0.001;
+
     updatePhysics();
+
+    // 2. 更新选中卡牌的卡面动画 (仅在展示阶段)
+    if (STATE.phase === 'result' && STATE.selectedCards.length > 0) {
+        STATE.selectedCards.forEach(c => {
+            // c.mesh.children[2] 是正面 Mesh
+            if (c.mesh && c.mesh.children[2]) {
+                const mat = c.mesh.children[2].material;
+                animateCardFace(mat, time);
+            }
+        });
+    }
+
     renderer.render(scene, camera);
 }
 animate();

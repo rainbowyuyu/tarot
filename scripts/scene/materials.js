@@ -1,6 +1,7 @@
 import { renderer, isMobile } from './core.js';
 import { TAROT_DATA } from '../globals.js';
-import { drawArcanaSymbol } from '../cardStyles.js';
+import { getDrawer } from '../cardRegistry.js'; // 导入管理器
+import { setGoldStroke } from '../cardUtils.js';
 
 // --- 辅助绘图 ---
 
@@ -333,7 +334,8 @@ function createCardBackTexture() {
 }
 
 // --- 卡面 Canvas 生成 (保持原样或微调) ---
-export function createCardCanvas(name) {
+// --- 新的卡面生成逻辑 ---
+export function createCardCanvas(name, time = 0) {
     const width = 512;
     const height = 1024;
     const canvas = document.createElement('canvas');
@@ -341,68 +343,52 @@ export function createCardCanvas(name) {
     canvas.height = height;
     const ctx = canvas.getContext('2d');
 
-    // 背景：羊皮纸质感
-    ctx.fillStyle = '#f3e5d0';
+    // 1. 绘制边框 (通用)
+    ctx.fillStyle = '#f3e5d0'; // 羊皮纸底色
     ctx.fillRect(0, 0, width, height);
 
-    // 增加纸张纹理
-    ctx.fillStyle = 'rgba(160, 120, 80, 0.08)';
-    for(let i=0; i<3000; i++) {
-        ctx.fillRect(Math.random()*width, Math.random()*height, 2, 2);
-    }
+    // 2. 调用具体的卡牌绘制逻辑
+    const drawer = getDrawer(name);
 
-    // 边框
-    const borderGrad = ctx.createLinearGradient(0, 0, width, height);
-    borderGrad.addColorStop(0, '#cba135');
-    borderGrad.addColorStop(1, '#8a6e2f');
-    ctx.strokeStyle = borderGrad;
-    ctx.lineWidth = 18;
-    drawRoundedRect(ctx, 15, 15, width - 30, height - 30, 20);
-    ctx.lineWidth = 4;
-    drawRoundedRect(ctx, 30, 30, width - 60, height - 60, 10);
+    // 创建一个裁剪区域用于绘制卡面内容 (不覆盖边框)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(40, 40, width - 80, height - 80);
+    ctx.clip();
 
-    // 内容区域
-    const contentHeight = height - 320;
-    ctx.fillStyle = '#fdfbf7';
-    ctx.fillRect(50, 50, 412, contentHeight);
-    ctx.strokeStyle = '#aa9977';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(50, 50, 412, contentHeight);
+    // 执行绘制 (传入 time)
+    drawer(ctx, width, height, time);
+    ctx.restore();
 
-    // 图案
-    const id = TAROT_DATA.indexOf(name);
-    if (id !== -1) drawArcanaSymbol(ctx, 256, 50 + contentHeight/2, id);
-
-    // 文字
-    ctx.fillStyle = '#222';
-    ctx.font = 'bold 38px "Cinzel", serif';
-    ctx.textAlign = 'center';
-
-    // 解析名字
-    const cleanName = name.split('(')[0].trim();
-    const enName = name.split('(')[1]?.replace(')', '') || "";
-
-    ctx.fillText(cleanName, 256, height - 200);
-
-    ctx.font = 'italic 22px serif';
-    ctx.fillStyle = '#666';
-    ctx.fillText(enName, 256, height - 150);
+    // 3. 绘制统一的华丽金边
+    setGoldStroke(ctx, width, height, 15);
+    drawRoundedRect(ctx, 20, 20, width - 40, height - 40, 20);
+    setGoldStroke(ctx, width, height, 5);
+    drawRoundedRect(ctx, 35, 35, width - 70, height - 70, 10);
 
     return canvas;
 }
 
 export function getCardFrontMaterial(name) {
-    const canvas = createCardCanvas(name);
+    // 初始生成 (time = 0)
+    const canvas = createCardCanvas(name, 0);
     const tex = new THREE.CanvasTexture(canvas);
     tex.encoding = THREE.sRGBEncoding;
     tex.anisotropy = isMobile ? 1 : renderer.capabilities.getMaxAnisotropy();
-    tex.needsUpdate = true;
 
-    return new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshStandardMaterial({
         map: tex,
-        roughness: 0.6,
+        roughness: 0.5,
         metalness: 0.1
     });
+
+    // 将 canvas 和 name 存入 userData，以便后续更新动画
+    mat.userData.cardName = name;
+    mat.userData.canvas = canvas;
+    mat.userData.ctx = canvas.getContext('2d');
+    mat.userData.texture = tex;
+
+    return mat;
 }
 
 // 导出材质
@@ -428,3 +414,48 @@ export const cardFrontBaseMat = new THREE.MeshStandardMaterial({
     roughness: 0.5,
     metalness: 0.1
 });
+
+// --- 动画更新逻辑 ---
+// 警告：不要对所有卡牌调用此函数！只对“特写”状态的卡牌调用！
+export function animateCardFace(material, time) {
+    if (!material.userData.ctx) return;
+
+    const { cardName, canvas, ctx, texture } = material.userData;
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // 清空并重绘
+    ctx.clearRect(0, 0, width, height);
+
+    // 重新生成 Canvas 内容
+    // 注意：这里我们重新运行 createCardCanvas 的逻辑，但为了性能最好提取出来
+    // 简便起见，这里直接复用绘图逻辑
+
+    // 1. 底色
+    ctx.fillStyle = '#f3e5d0';
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. 内容
+    const drawer = getDrawer(cardName);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(40, 40, width - 80, height - 80);
+    ctx.clip();
+    drawer(ctx, width, height, time);
+    ctx.restore();
+
+    // 3. 边框
+    setGoldStroke(ctx, width, height, 15);
+    drawRoundedRect(ctx, 20, 20, width - 40, height - 40, 20);
+    setGoldStroke(ctx, width, height, 5);
+    drawRoundedRect(ctx, 35, 35, width - 70, height - 70, 10);
+
+    // 标记纹理更新
+    texture.needsUpdate = true;
+}
+
+export function updateCardMaterials(time) {
+    if (cardBackMat.userData.shader) {
+        cardBackMat.userData.shader.uniforms.uTime.value = time;
+    }
+}
