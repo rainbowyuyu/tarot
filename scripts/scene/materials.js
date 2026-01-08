@@ -1,11 +1,15 @@
+// --- START OF FILE scene/materials.js ---
+
 import { renderer, isMobile } from './core.js';
-import { TAROT_DATA } from '../globals.js';
-import { getDrawer } from '../cardRegistry.js'; // 导入管理器
+import { getDrawer } from '../cardRegistry.js';
 import { setGoldStroke } from '../cardUtils.js';
 
-// --- 辅助绘图 ---
+// --- 全局变量用于卡背动画 ---
+let backCanvas, backCtx, backTexture;
+let backStaticCanvas; // 用于缓存静态背景
+let particles = [];   // 魔法粒子系统
 
-// 绘制圆角矩形
+// 绘制圆角矩形 (辅助)
 function drawRoundedRect(ctx, x, y, width, height, radius) {
     ctx.beginPath();
     ctx.moveTo(x + radius, y);
@@ -21,7 +25,7 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
     ctx.stroke();
 }
 
-// 绘制复杂的尖角星（带内凹）
+// 绘制尖角星 (辅助)
 function drawStarShape(ctx, cx, cy, spikes, outerRadius, innerRadius) {
     let rot = Math.PI / 2 * 3;
     let x = cx;
@@ -35,7 +39,6 @@ function drawStarShape(ctx, cx, cy, spikes, outerRadius, innerRadius) {
         y = cy + Math.sin(rot) * outerRadius;
         ctx.lineTo(x, y);
         rot += step;
-
         x = cx + Math.cos(rot) * innerRadius;
         y = cy + Math.sin(rot) * innerRadius;
         ctx.lineTo(x, y);
@@ -45,117 +48,167 @@ function drawStarShape(ctx, cx, cy, spikes, outerRadius, innerRadius) {
     ctx.closePath();
 }
 
-// --- 卡背纹理生成 (核心优化) ---
-function createCardBackTexture() {
+// --- 1. 初始化卡背 (只执行一次) ---
+function initCardBack() {
+    const width = 512;
+    const height = 1024;
+
+    // 主画布
+    backCanvas = document.createElement('canvas');
+    backCanvas.width = width;
+    backCanvas.height = height;
+    backCtx = backCanvas.getContext('2d');
+
+    // 缓存画布 (绘制深层静态背景)
+    backStaticCanvas = document.createElement('canvas');
+    backStaticCanvas.width = width;
+    backStaticCanvas.height = height;
+    const sCtx = backStaticCanvas.getContext('2d');
+    const cx = width / 2;
+    const cy = height / 2;
+
+    // --- 绘制静态宇宙背景 (Base Layer) ---
+    const colors = {
+        bgBase: '#090011',
+        bgNebula1: '#1a0b2e',
+    };
+
+    // 基础填充
+    sCtx.fillStyle = colors.bgBase;
+    sCtx.fillRect(0, 0, width, height);
+
+    // 基础星云 (静态层)
+    sCtx.globalCompositeOperation = 'screen';
+    const grad1 = sCtx.createRadialGradient(cx, 0, 100, cx, 300, 800);
+    grad1.addColorStop(0, colors.bgNebula1);
+    grad1.addColorStop(1, 'transparent');
+    sCtx.fillStyle = grad1;
+    sCtx.fillRect(0, 0, width, height);
+    sCtx.globalCompositeOperation = 'source-over';
+
+    // 远景微弱星星 (静态)
+    for(let i=0; i<600; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const alpha = Math.random() * 0.3; // 很暗
+        sCtx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        sCtx.fillRect(x, y, 1, 1);
+    }
+
+    // 初始化粒子系统 (无缝循环准备)
+    for(let i=0; i<60; i++) {
+        particles.push({
+            // 基础属性
+            baseAngle: Math.random() * Math.PI * 2,
+            baseRadius: 20 + Math.random() * 150,
+            speed: 0.2 + Math.random() * 0.5,
+            size: 0.5 + Math.random() * 2,
+            // 相位偏移，保证粒子不同时闪烁
+            phase: Math.random() * Math.PI * 2,
+            colorBase: Math.random() > 0.5 ? '200, 230, 255' : '255, 220, 150'
+        });
+    }
+
+    // 创建纹理对象
+    backTexture = new THREE.CanvasTexture(backCanvas);
+    backTexture.encoding = THREE.sRGBEncoding;
+    if (!isMobile) backTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    return backTexture;
+}
+
+// --- 2. 实时更新卡背 (每帧调用) ---
+export function updateCardBack(time) {
+    if (!backCtx || !backStaticCanvas) return;
+
     const width = 512;
     const height = 1024;
     const cx = width / 2;
     const cy = height / 2;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    // A. 恢复静态背景
+    backCtx.drawImage(backStaticCanvas, 0, 0);
 
-    // --- 1. 调色板 ---
+    // B. 动态星云层 (双层呼吸效果，避免单一频率的单调)
+    const breath1 = (Math.sin(time * 0.8) * 0.5 + 0.5);
+    const breath2 = (Math.cos(time * 0.5) * 0.5 + 0.5);
+
+    const nebulaPulse = backCtx.createRadialGradient(cx, cy, 50, cx, cy, 700);
+    nebulaPulse.addColorStop(0, `rgba(75, 0, 130, ${0.1 + breath1 * 0.05})`); // 深紫
+    nebulaPulse.addColorStop(0.5, `rgba(0, 50, 150, ${0.05 + breath2 * 0.05})`); // 深蓝
+    nebulaPulse.addColorStop(1, 'transparent');
+
+    backCtx.globalCompositeOperation = 'screen';
+    backCtx.fillStyle = nebulaPulse;
+    backCtx.fillRect(0,0,width,height);
+    backCtx.globalCompositeOperation = 'source-over';
+
+    // C. 闪烁的近景星星 (使用 Sine 保证平滑过渡)
+    for(let i=0; i<30; i++) {
+        const x = (i * 123.45) % width;
+        const y = (i * 678.90) % height;
+        // 使用 time 产生平滑的明暗变化，而不是随机闪烁
+        const twinkle = Math.sin(time * 2 + i) * 0.4 + 0.6;
+        backCtx.fillStyle = `rgba(200, 220, 255, ${twinkle * 0.8})`;
+        backCtx.beginPath();
+        backCtx.arc(x, y, 1.5 * twinkle, 0, Math.PI*2);
+        backCtx.fill();
+    }
+
+    // 调色板
     const colors = {
-        bgBase: '#090011',    // 极深的紫黑
-        bgNebula1: '#240b36', // 深紫
-        bgNebula2: '#1a0b50', // 深蓝紫
-        goldDark: '#8B5A2B',  // 古铜金
-        goldMid: '#D4AF37',   // 标准金
-        goldLight: '#FFECB3', // 高光金
-        glow: 'rgba(255, 200, 100, 0.6)'
+        goldDark: '#5e3206',
+        goldMid: '#daa520',
+        goldLight: '#fffacd', // 柠檬绸色
+        goldHot: '#ffffe0'    // 极亮
     };
 
-    // --- 2. 绘制深邃宇宙背景 ---
-    // 基础填充
-    ctx.fillStyle = colors.bgBase;
-    ctx.fillRect(0, 0, width, height);
+    // --- 高级流体黄金笔触 (无缝版) ---
+    function setLiquidGoldStyle(lineWidth = 2, isLight = false) {
+        // 使用正弦波控制高光位置，在画布范围内往复运动，避免 % width 造成的跳变
+        const highlightPos = (Math.sin(time * 0.8) * 0.5 + 0.5) * width * 1.5 - width * 0.25;
 
-    // 混合模式绘制星云 (增加层次感)
-    ctx.globalCompositeOperation = 'screen';
+        // 创建较大的渐变区域以覆盖整个路径
+        const gradient = backCtx.createLinearGradient(highlightPos - 300, 0, highlightPos + 300, height);
 
-    // 星云层 1 (上方)
-    const grad1 = ctx.createRadialGradient(cx, 0, 100, cx, 300, 600);
-    grad1.addColorStop(0, colors.bgNebula1);
-    grad1.addColorStop(1, 'transparent');
-    ctx.fillStyle = grad1;
-    ctx.fillRect(0, 0, width, height);
+        gradient.addColorStop(0.0, colors.goldDark);
+        gradient.addColorStop(0.4, colors.goldMid);
+        gradient.addColorStop(0.5, colors.goldHot); // 移动的高光带
+        gradient.addColorStop(0.6, colors.goldMid);
+        gradient.addColorStop(1.0, colors.goldDark);
 
-    // 星云层 2 (中心)
-    const grad2 = ctx.createRadialGradient(cx, cy, 50, cx, cy, 500);
-    grad2.addColorStop(0, 'rgba(60, 20, 80, 0.4)');
-    grad2.addColorStop(1, 'transparent');
-    ctx.fillStyle = grad2;
-    ctx.fillRect(0, 0, width, height);
+        backCtx.strokeStyle = gradient;
+        backCtx.fillStyle = gradient;
+        backCtx.lineWidth = lineWidth;
 
-    ctx.globalCompositeOperation = 'source-over'; // 恢复默认
-
-    // 绘制微小的背景星星 (增加噪点质感)
-    for(let i=0; i<800; i++) {
-        const x = Math.random() * width;
-        const y = Math.random() * height;
-        const alpha = Math.random() * 0.5;
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.fillRect(x, y, 1.5, 1.5);
+        // 动态辉光 (呼吸)
+        const pulse = (Math.sin(time * 2) + 1) * 0.5;
+        backCtx.shadowBlur = isLight ? 10 + pulse * 10 : 5;
+        backCtx.shadowColor = isLight ? colors.goldLight : colors.goldMid;
     }
 
+    // D. 绘制边框
+    setLiquidGoldStyle(8);
+    drawRoundedRect(backCtx, 15, 15, width - 30, height - 30, 25);
+    setLiquidGoldStyle(2);
+    drawRoundedRect(backCtx, 30, 30, width - 60, height - 60, 15);
 
-    // --- 3. 黄金笔触工具函数 ---
-    // 创建金属渐变笔触
-    function setGoldStyle(lineWidth = 2, isLight = false) {
-        // 创建一个斜向的线性渐变，模拟金属反光
-        const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, colors.goldDark);
-        gradient.addColorStop(0.3, colors.goldLight); // 高光点
-        gradient.addColorStop(0.5, colors.goldMid);
-        gradient.addColorStop(0.7, colors.goldLight); // 第二高光
-        gradient.addColorStop(1, colors.goldDark);
-
-        ctx.strokeStyle = gradient;
-        ctx.fillStyle = gradient;
-        ctx.lineWidth = lineWidth;
-
-        // 添加辉光
-        ctx.shadowBlur = isLight ? 15 : 5;
-        ctx.shadowColor = colors.goldMid;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-    }
-
-
-    // --- 4. 绘制精致边框 ---
-    setGoldStyle(6); // 外粗框
-    drawRoundedRect(ctx, 15, 15, width - 30, height - 30, 25);
-
-    setGoldStyle(2); // 内细框
-    drawRoundedRect(ctx, 30, 30, width - 60, height - 60, 15);
-
-    // 边框装饰：角落的花纹 (Fleur-de-lis 风格简化)
+    // 边框装饰角落
     function drawOrnateCorner(x, y, angle) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(angle);
-        setGoldStyle(3);
+        backCtx.save();
+        backCtx.translate(x, y);
+        backCtx.rotate(angle);
+        setLiquidGoldStyle(3);
+        backCtx.beginPath();
+        backCtx.moveTo(0, 0); backCtx.lineTo(35, 35);
+        backCtx.moveTo(0, 10); backCtx.bezierCurveTo(20, 10, 25, 25, 10, 50);
+        backCtx.moveTo(10, 0); backCtx.bezierCurveTo(10, 20, 25, 25, 50, 10);
+        backCtx.stroke();
 
-        ctx.beginPath();
-        // 中心线
-        ctx.moveTo(0, 0);
-        ctx.lineTo(25, 25);
-        // 卷曲
-        ctx.moveTo(0, 10);
-        ctx.bezierCurveTo(15, 10, 20, 20, 10, 40);
-        ctx.moveTo(10, 0);
-        ctx.bezierCurveTo(10, 15, 20, 20, 40, 10);
-
-        ctx.stroke();
-
-        // 装饰点
-        ctx.fillStyle = colors.goldLight;
-        ctx.beginPath(); ctx.arc(18, 18, 3, 0, Math.PI*2); ctx.fill();
-
-        ctx.restore();
+        // 装饰点 (柔和呼吸)
+        backCtx.fillStyle = `rgba(255, 255, 224, ${Math.sin(time * 3) * 0.2 + 0.8})`;
+        backCtx.beginPath(); backCtx.arc(22, 22, 3, 0, Math.PI*2); backCtx.fill();
+        backCtx.restore();
     }
 
     const margin = 45;
@@ -165,177 +218,191 @@ function createCardBackTexture() {
     drawOrnateCorner(margin, height-margin, -Math.PI/2);
 
 
-    // --- 5. 绘制中央星盘 (The Zodiac Wheel) ---
+    // E. 动态星盘 (Zodiac Wheel) - 恒速旋转 + 能量脉冲
     const wheelR = 150;
 
-    // 5.1 星盘底色 (让复杂的线条在深色背景上更清晰)
-    ctx.beginPath();
-    ctx.arc(cx, cy, wheelR + 5, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(10, 5, 20, 0.8)';
-    ctx.fill();
+    // 背景遮罩
+    backCtx.beginPath();
+    backCtx.arc(cx, cy, wheelR + 5, 0, Math.PI*2);
+    backCtx.fillStyle = 'rgba(5, 0, 10, 0.85)';
+    backCtx.fill();
 
-    // 5.2 同心圆环
-    setGoldStyle(1);
-    ctx.beginPath(); ctx.arc(cx, cy, wheelR, 0, Math.PI*2); ctx.stroke(); // 外圈
-    setGoldStyle(3);
-    ctx.beginPath(); ctx.arc(cx, cy, wheelR - 15, 0, Math.PI*2); ctx.stroke(); // 粗圈
-    setGoldStyle(1);
-    ctx.beginPath(); ctx.arc(cx, cy, wheelR - 20, 0, Math.PI*2); ctx.stroke(); // 内细圈
-    ctx.beginPath(); ctx.arc(cx, cy, wheelR - 50, 0, Math.PI*2); ctx.stroke(); // 核心圈
+    backCtx.save();
+    backCtx.translate(cx, cy);
+    backCtx.rotate(time * 0.1); // 恒定旋转
 
-    // 5.3 黄道十二宫格与装饰
-    ctx.save();
-    ctx.translate(cx, cy);
+    // 轮圈
+    setLiquidGoldStyle(2);
+    backCtx.beginPath(); backCtx.arc(0, 0, wheelR, 0, Math.PI*2); backCtx.stroke();
+    setLiquidGoldStyle(4);
+    backCtx.beginPath(); backCtx.arc(0, 0, wheelR - 15, 0, Math.PI*2); backCtx.stroke();
+
+    // 宫格与符文
     const sectors = 12;
-
     for(let i=0; i<sectors; i++) {
         const angle = (Math.PI * 2 / sectors) * i;
-        const nextAngle = (Math.PI * 2 / sectors) * (i + 1);
         const midAngle = angle + (Math.PI / sectors);
 
-        // 宫格分割线
-        setGoldStyle(1);
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(angle) * (wheelR - 50), Math.sin(angle) * (wheelR - 50));
-        ctx.lineTo(Math.cos(angle) * wheelR, Math.sin(angle) * wheelR);
-        ctx.stroke();
+        setLiquidGoldStyle(1);
+        backCtx.beginPath();
+        backCtx.moveTo(Math.cos(angle) * (wheelR - 50), Math.sin(angle) * (wheelR - 50));
+        backCtx.lineTo(Math.cos(angle) * wheelR, Math.sin(angle) * wheelR);
+        backCtx.stroke();
 
-        // 在格子中间绘制神秘符号 (模拟星座符号)
-        // 使用简单的几何图形组合来模拟古老符文
+        // 符文
         const rSymbol = wheelR - 35;
-        const sx = Math.cos(midAngle) * rSymbol;
-        const sy = Math.sin(midAngle) * rSymbol;
+        backCtx.save();
+        backCtx.translate(Math.cos(midAngle) * rSymbol, Math.sin(midAngle) * rSymbol);
+        backCtx.rotate(midAngle + Math.PI/2);
 
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(midAngle + Math.PI/2); // 旋转符号使其朝向圆心
+        // 符文流光逻辑 (依次点亮，形成跑马灯效果)
+        const activeIndex = Math.floor((time * 4) % 12);
+        const isActive = (i === activeIndex);
+        const symbolAlpha = isActive ? 1.0 : 0.3;
 
-        setGoldStyle(2);
-        ctx.beginPath();
-        // 随机生成一些简单的“符文”形状
-        if (i % 3 === 0) {
-            ctx.arc(0, 0, 6, 0, Math.PI*2); // 圆
-        } else if (i % 3 === 1) {
-            ctx.moveTo(0, -6); ctx.lineTo(-5, 4); ctx.lineTo(5, 4); ctx.closePath(); // 三角
-        } else {
-            ctx.moveTo(0, -6); ctx.lineTo(0, 6); ctx.moveTo(-5, 0); ctx.lineTo(5, 0); // 十字
-        }
-        ctx.stroke();
-        ctx.restore();
+        backCtx.strokeStyle = `rgba(255, 215, 0, ${symbolAlpha})`;
+        backCtx.lineWidth = 2;
+        backCtx.shadowBlur = isActive ? 15 : 0;
+        backCtx.shadowColor = 'gold';
 
-        // 刻度线 (Ticks)
-        const tickAngle = angle + (Math.PI / sectors / 2); // 每个格子中间的小刻度
-        setGoldStyle(1);
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(tickAngle) * (wheelR - 15), Math.sin(tickAngle) * (wheelR - 15));
-        ctx.lineTo(Math.cos(tickAngle) * (wheelR - 20), Math.sin(tickAngle) * (wheelR - 20));
-        ctx.stroke();
+        backCtx.beginPath();
+        if (i % 3 === 0) backCtx.arc(0, 0, 6, 0, Math.PI*2);
+        else if (i % 3 === 1) { backCtx.moveTo(0, -6); backCtx.lineTo(-5, 4); backCtx.lineTo(5, 4); backCtx.closePath(); }
+        else { backCtx.moveTo(0, -6); backCtx.lineTo(0, 6); backCtx.moveTo(-5, 0); backCtx.lineTo(5, 0); }
+        backCtx.stroke();
+        backCtx.restore();
     }
-    ctx.restore();
+    backCtx.restore();
+
+    // F. 魔法粒子系统 (无缝循环版)
+    backCtx.globalCompositeOperation = 'screen';
+    particles.forEach((p) => {
+        // 使用时间作为偏移量，而不是修改状态，保证纯函数式的动画流畅性
+        // 粒子沿螺旋线运动
+        const t = time * p.speed + p.phase;
+
+        // 半径周期性变化 (从外向内螺旋)
+        const radiusCycle = (t % 1); // 0 -> 1
+        const currentRadius = p.baseRadius * (1 - radiusCycle); // 大 -> 小
+
+        // 角度随时间增加
+        const currentAngle = p.baseAngle + t;
+
+        // 透明度：两头淡入淡出，中间亮
+        // 使用正弦波的一半 (0 -> 1 -> 0)
+        const alpha = Math.sin(radiusCycle * Math.PI) * 0.8;
+
+        const px = cx + Math.cos(currentAngle) * currentRadius;
+        const py = cy + Math.sin(currentAngle) * currentRadius;
+
+        backCtx.fillStyle = `rgba(${p.colorBase}, ${alpha})`;
+        backCtx.beginPath();
+        backCtx.arc(px, py, p.size, 0, Math.PI*2);
+        backCtx.fill();
+    });
+    backCtx.globalCompositeOperation = 'source-over';
 
 
-    // --- 6. 绘制中央八角星 (Radiant Star) ---
-    ctx.save();
+    // G. 中央八角星 - 能量激波 (柔和版)
+    backCtx.save();
+    backCtx.translate(cx, cy);
+    const starPulse = 1 + Math.sin(time * 1.5) * 0.03;
+    backCtx.scale(starPulse, starPulse);
 
-    // 6.1 星星背后的光晕 (Glow)
-    const starGlow = ctx.createRadialGradient(cx, cy, 10, cx, cy, 120);
-    starGlow.addColorStop(0, 'rgba(255, 236, 179, 0.8)'); // 亮白金
-    starGlow.addColorStop(0.4, 'rgba(212, 175, 55, 0.4)'); // 金色
+    // 能量激波环 (无限向外扩散)
+    // 使用模运算产生周期，但控制透明度在边界为0
+    const wavePeriod = 2.0; // 2秒一波
+    const waveProgress = (time % wavePeriod) / wavePeriod;
+    const shockwaveR = waveProgress * 160;
+    const shockAlpha = Math.sin((1 - waveProgress) * Math.PI / 2); // 1 -> 0 非线性衰减
+
+    if(shockAlpha > 0.01) {
+        backCtx.beginPath();
+        backCtx.arc(0, 0, shockwaveR, 0, Math.PI*2);
+        backCtx.strokeStyle = `rgba(255, 255, 200, ${shockAlpha * 0.4})`;
+        backCtx.lineWidth = 2 * (1-waveProgress); // 越来越细
+        backCtx.stroke();
+    }
+
+    // 星星光晕
+    const starGlow = backCtx.createRadialGradient(0, 0, 5, 0, 0, 130);
+    starGlow.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    starGlow.addColorStop(0.3, 'rgba(255, 215, 0, 0.5)');
     starGlow.addColorStop(1, 'transparent');
-    ctx.fillStyle = starGlow;
-    ctx.globalCompositeOperation = 'screen';
-    ctx.beginPath(); ctx.arc(cx, cy, 120, 0, Math.PI*2); ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
+    backCtx.fillStyle = starGlow;
+    backCtx.globalCompositeOperation = 'screen';
+    backCtx.beginPath(); backCtx.arc(0, 0, 130, 0, Math.PI*2); backCtx.fill();
+    backCtx.globalCompositeOperation = 'source-over';
 
-    // 6.2 主体八角星 (实心填充)
+    // 星星本体
     const starOuter = 90;
     const starInner = 35;
+    const starFill = backCtx.createRadialGradient(0, 0, 5, 0, 0, starOuter);
+    starFill.addColorStop(0, '#FFFFFF');
+    starFill.addColorStop(0.2, '#fffacd');
+    starFill.addColorStop(1, '#b8860b');
+    backCtx.fillStyle = starFill;
+    drawStarShape(backCtx, 0, 0, 8, starOuter, starInner);
+    backCtx.fill();
 
-    // 使用径向渐变填充星星，制造立体感
-    const starFill = ctx.createRadialGradient(cx, cy, 5, cx, cy, starOuter);
-    starFill.addColorStop(0, '#FFFFFF'); // 核心极亮
-    starFill.addColorStop(0.3, colors.goldLight);
-    starFill.addColorStop(1, colors.goldDark);
+    setLiquidGoldStyle(3, true);
+    drawStarShape(backCtx, 0, 0, 8, starOuter, starInner);
+    backCtx.stroke();
 
-    ctx.fillStyle = starFill;
-    drawStarShape(ctx, cx, cy, 8, starOuter, starInner);
-    ctx.fill();
+    // 炫光 (Lens Flare) - 恒速旋转
+    backCtx.rotate(-time * 0.2);
+    backCtx.globalCompositeOperation = 'screen';
+    const flareLen = 200 + Math.sin(time * 3) * 15; // 长度微动
+    const flareWidth = 2;
 
-    // 6.3 星星边框 (加强轮廓)
-    setGoldStyle(2, true); // 开启高亮描边
-    drawStarShape(ctx, cx, cy, 8, starOuter, starInner);
-    ctx.stroke();
+    backCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    backCtx.beginPath();
+    backCtx.moveTo(0, -flareLen);
+    backCtx.quadraticCurveTo(flareWidth, 0, 0, flareLen);
+    backCtx.quadraticCurveTo(-flareWidth, 0, 0, -flareLen);
+    backCtx.fill();
 
-    // 6.4 十字炫光 (Lens Flare) - 关键的“高级感”来源
-    ctx.globalCompositeOperation = 'screen'; // 叠加模式
-    const flareLen = 180;
-    const flareWidth = 3;
+    backCtx.beginPath();
+    backCtx.moveTo(-flareLen, 0);
+    backCtx.quadraticCurveTo(0, flareWidth, flareLen, 0);
+    backCtx.quadraticCurveTo(0, -flareWidth, -flareLen, 0);
+    backCtx.fill();
 
-    const flareGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, flareLen);
-    flareGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-    flareGrad.addColorStop(0.2, 'rgba(255, 255, 255, 0.5)');
-    flareGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = flareGrad;
+    // 中心高光点
+    backCtx.fillStyle = '#fff';
+    backCtx.beginPath(); backCtx.arc(0,0,6,0,Math.PI*2); backCtx.fill();
 
-    // 竖向光束
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - flareLen);
-    ctx.quadraticCurveTo(cx + flareWidth, cy, cx, cy + flareLen);
-    ctx.quadraticCurveTo(cx - flareWidth, cy, cx, cy - flareLen);
-    ctx.fill();
+    backCtx.restore();
 
-    // 横向光束
-    ctx.beginPath();
-    ctx.moveTo(cx - flareLen, cy);
-    ctx.quadraticCurveTo(cx, cy + flareWidth, cx + flareLen, cy);
-    ctx.quadraticCurveTo(cx, cy - flareWidth, cx - flareLen, cy);
-    ctx.fill();
-
-    ctx.restore();
-
-
-    // --- 7. 上下装饰结构 ---
+    // H. 上下装饰
     function drawMoonDecor(y, scaleY) {
-        ctx.save();
-        ctx.translate(cx, y);
-        ctx.scale(1, scaleY);
-        setGoldStyle(2);
+        backCtx.save();
+        backCtx.translate(cx, y);
+        backCtx.scale(1, scaleY);
+        setLiquidGoldStyle(3);
+        backCtx.beginPath();
+        backCtx.arc(0, 0, 30, Math.PI, 0);
+        backCtx.bezierCurveTo(0, -10, 0, -10, -30, 0);
+        backCtx.stroke();
 
-        // 新月形状
-        ctx.beginPath();
-        ctx.arc(0, 0, 30, Math.PI, 0); // 半圆
-        ctx.bezierCurveTo(0, -10, 0, -10, -30, 0); // 封闭
-        ctx.stroke();
+        backCtx.beginPath(); backCtx.moveTo(0, 0); backCtx.lineTo(0, 40); backCtx.stroke();
 
-        // 悬挂的菱形
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(0, 40);
-        ctx.stroke();
-
-        ctx.fillStyle = colors.goldLight;
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.moveTo(0, 40); ctx.lineTo(8, 55); ctx.lineTo(0, 70); ctx.lineTo(-8, 55);
-        ctx.fill();
-
-        ctx.restore();
+        // 宝石
+        backCtx.fillStyle = `rgba(100, 200, 255, 0.8)`;
+        backCtx.shadowColor = 'cyan';
+        backCtx.shadowBlur = 10;
+        backCtx.beginPath();
+        backCtx.moveTo(0, 40); backCtx.lineTo(8, 55); backCtx.lineTo(0, 70); backCtx.lineTo(-8, 55);
+        backCtx.fill();
+        backCtx.restore();
     }
-
     drawMoonDecor(170, 1);
     drawMoonDecor(height - 170, -1);
 
-
-    // --- 8. 输出纹理 ---
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.encoding = THREE.sRGBEncoding;
-    tex.anisotropy = isMobile ? 1 : renderer.capabilities.getMaxAnisotropy();
-    tex.needsUpdate = true;
-    return tex;
+    if(backTexture) backTexture.needsUpdate = true;
 }
 
-// --- 卡面 Canvas 生成 (保持原样或微调) ---
-// --- 核心修改：导出这个绘制函数 ---
-// 这是一个通用的绘制器，既可以用于 3D 纹理，也可以用于 2D UI
+// --- 卡面 Canvas 生成 (UI/Texture共用) ---
 export function updateCanvasContent(ctx, width, height, name, time) {
     // 1. 清除画布
     ctx.clearRect(0, 0, width, height);
@@ -352,7 +419,7 @@ export function updateCanvasContent(ctx, width, height, name, time) {
     ctx.rect(40, 40, width - 80, height - 80);
     ctx.clip();
 
-    // 执行具体绘制 (传递时间参数实现动画)
+    // 执行具体绘制
     drawer(ctx, width, height, time);
     ctx.restore();
 
@@ -364,7 +431,7 @@ export function updateCanvasContent(ctx, width, height, name, time) {
     drawRoundedRect(ctx, 35, 35, width - 70, height - 70, 10);
 }
 
-// --- 卡面 Canvas 生成 ---
+// 用于结果页生成静态/动态 Canvas
 export function createCardCanvas(name, time = 0) {
     const width = 512;
     const height = 1024;
@@ -372,20 +439,16 @@ export function createCardCanvas(name, time = 0) {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
-
     updateCanvasContent(ctx, width, height, name, time);
-
     return canvas;
 }
 
+// 3D 卡牌正面材质
 export function getCardFrontMaterial(name) {
     const canvas = createCardCanvas(name, 0);
     const tex = new THREE.CanvasTexture(canvas);
     tex.encoding = THREE.sRGBEncoding;
-
-    if (!isMobile) {
-        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    }
+    if (!isMobile) tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
     const mat = new THREE.MeshStandardMaterial({
         map: tex,
@@ -400,35 +463,35 @@ export function getCardFrontMaterial(name) {
         ctx: canvas.getContext('2d'),
         texture: tex
     };
-
     return mat;
 }
 
-// 导出材质
+// --- 导出统一材质 ---
+
+// 1. 动态卡背材质
 export const cardBackMat = new THREE.MeshStandardMaterial({
-    map: createCardBackTexture(),
+    map: initCardBack(),
     color: 0xffffff,
-    roughness: 0.3, // 降低粗糙度，让光泽更明显
-    metalness: 0.7, // 提高金属感
-    emissive: 0x221144, // 微弱的紫色自发光
+    roughness: 0.3,
+    metalness: 0.7,
+    emissive: 0x221144,
     emissiveIntensity: 0.1
 });
 
+// 2. 卡身
 export const cardBodyMat = new THREE.MeshStandardMaterial({
-    color: 0xccaa44,
-    roughness: 0.2,
-    metalness: 0.9,
-    emissive: 0x221100,
-    emissiveIntensity: 0.2
+    color: 0xccaa44, roughness: 0.2, metalness: 0.9, emissive: 0x221100, emissiveIntensity: 0.2
 });
 
+// 3. 卡面底座 (未翻开前)
 export const cardFrontBaseMat = new THREE.MeshStandardMaterial({
-    color: 0x111111,
-    roughness: 0.5,
-    metalness: 0.1
+    color: 0x111111, roughness: 0.5, metalness: 0.1
 });
 
-// 3D 卡牌动画更新接口
+
+// --- 动画更新接口 ---
+
+// 更新卡面 (正面)
 export function animateCardFace(material, time) {
     if (!material || !material.userData || !material.userData.ctx) return;
     const { cardName, canvas, ctx, texture } = material.userData;
@@ -436,8 +499,7 @@ export function animateCardFace(material, time) {
     texture.needsUpdate = true;
 }
 
+// 更新所有材质 (包括卡背)
 export function updateCardMaterials(time) {
-    if (cardBackMat.userData.shader) {
-        cardBackMat.userData.shader.uniforms.uTime.value = time;
-    }
+    updateCardBack(time);
 }
