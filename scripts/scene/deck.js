@@ -1,6 +1,6 @@
 // --- START OF FILE scene/deck.js ---
 
-import { scene } from './core.js';
+import { scene, isMobile } from './core.js'; // 引入 isMobile
 import { CONFIG, TAROT_DATA } from '../globals.js';
 import { cardBackMat, cardBodyMat, cardFrontBaseMat } from './materials.js';
 
@@ -28,12 +28,17 @@ export function initDeck() {
     }
     cards.length = 0;
 
-    // 2. 打乱卡牌数据 (Randomization happens here)
+    // 2. 打乱卡牌数据
     const shuffledDeck = shuffleArray(TAROT_DATA);
     const totalCards = shuffledDeck.length;
 
     const cardGeo = new THREE.BoxGeometry(2, 3.5, 0.05);
     const faceGeo = new THREE.PlaneGeometry(2, 3.5);
+
+    // --- 适配修复 2: 调整布局参数 ---
+    // 手机端：半径减小，角度跨度减小，使卡牌在竖屏中间更聚拢
+    const currentRadius = isMobile ? CONFIG.deckRadius * 0.6 : CONFIG.deckRadius;
+    const currentAngleStep = isMobile ? 0.15 : 0.20;
 
     for (let i = 0; i < totalCards; i++) {
         const group = new THREE.Group();
@@ -54,23 +59,22 @@ export function initDeck() {
         frontMesh.receiveShadow = true;
         group.add(frontMesh);
 
-        // 保持物理位置(Shape)不变，是根据 i 计算的螺旋
-        const angleStep = 0.20;
-        const angle = (i - CONFIG.cardCount/2) * angleStep;
-        const radius = CONFIG.deckRadius;
+        // 排列逻辑
+        const angle = (i - CONFIG.cardCount/2) * currentAngleStep;
 
         group.position.set(
-            Math.sin(angle) * radius,
+            Math.sin(angle) * currentRadius,
             Math.cos(angle * 2) * 0.5 - 0.5,
-            Math.cos(angle) * radius - radius
+            Math.cos(angle) * currentRadius - currentRadius
         );
 
+        // 手机端稍微增加一点Y轴倾斜，让原本太宽的排列看起来更像一个拱形
         group.rotation.y = -angle;
         group.rotation.z = (Math.random() - 0.5) * 0.02;
 
         group.userData = {
             id: i,
-            name: shuffledDeck[i], // 这里将随机打乱后的名字赋给固定位置的卡
+            name: shuffledDeck[i],
             baseAngle: -angle,
             originalPos: group.position.clone(),
             originalRot: group.rotation.clone(),

@@ -1,22 +1,20 @@
 // --- START OF FILE main.js ---
 
-import { CONFIG, STATE } from './globals.js';
+import { CONFIG, STATE, TAROT_DATA } from './globals.js';
 import { ui } from './ui.js';
 import { scene, camera, renderer, deckGroup, cards, reticle, reticleOuter, reticleCore, pointLight, starField, initDeck } from './scene.js';
 import { fetchInterpretation } from './api.js';
-// 确保路径正确指向 materials.js
 import { updateCardMaterials, animateCardFace, getCardFrontMaterial, createCardCanvas, updateCanvasContent } from './scene/materials.js';
 
 const raycaster = new THREE.Raycaster();
 
-// --- 设备环境检测 ---
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
 
-// 扩展 STATE，用于存储结果页的 Canvas 引用以便动画更新
+// 扩展 STATE
 STATE.uiResultCanvases = [];
 
-// 动画函数
+// 动画函数 (保持不变)
 function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     const startPos = obj.position.clone();
     const startRot = obj.rotation.clone();
@@ -43,8 +41,7 @@ function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     loop();
 }
 
-// --- 游戏逻辑 ---
-
+// 确认选择逻辑 (保持不变)
 function confirmSelection(cardGroup) {
     if (STATE.selectedCards.length >= 3) return;
     if (STATE.selectedCards.find(c => c.mesh === cardGroup)) return;
@@ -56,7 +53,7 @@ function confirmSelection(cardGroup) {
     const isReversed = Math.random() > 0.5;
     const cardInfo = {
         mesh: cardGroup,
-        name: cardGroup.userData.name, // 这里获取的是 initDeck 洗牌后的随机名字
+        name: cardGroup.userData.name,
         orientation: isReversed ? "逆位" : "正位"
     };
     STATE.selectedCards.push(cardInfo);
@@ -75,8 +72,10 @@ function confirmSelection(cardGroup) {
     cardGroup.rotation.copy(euler);
 
     const slotIndex = STATE.selectedCards.length - 1;
-    const targetX = (slotIndex - 1) * 3.0;
-    const targetY = -2.5;
+    // 手机端展示位置微调
+    const spacing = isMobile ? 2.2 : 3.0;
+    const targetX = (slotIndex - 1) * spacing;
+    const targetY = isMobile ? -1.5 : -2.5;
     const targetZ = 9;
 
     cardGroup.children[0].material.emissive.setHex(0xffaa00);
@@ -110,11 +109,12 @@ function revealCards() {
     STATE.selectedCards.forEach((c, index) => {
         setTimeout(() => {
             const newMaterial = getCardFrontMaterial(c.name);
-            const frontMesh = c.mesh.children[2]; // 确保这里对应 deck.js 中的 frontMesh 索引
+            const frontMesh = c.mesh.children[2];
             frontMesh.material = newMaterial;
             frontMesh.material.needsUpdate = true;
 
-            const revealX = (index - 1) * 3.5;
+            const spacing = isMobile ? 2.5 : 3.5;
+            const revealX = (index - 1) * spacing;
             const revealY = 0.5;
             const revealZ = 10;
 
@@ -139,23 +139,19 @@ function showResultPanel() {
     ui.result.style.pointerEvents = "auto";
     ui.aiText.innerHTML = "正在连接星灵...";
     ui.revealCont.innerHTML = "";
-    STATE.uiResultCanvases = []; // 清空之前的记录
+    STATE.uiResultCanvases = [];
 
     STATE.selectedCards.forEach(c => {
         const cardContainer = document.createElement('div');
         cardContainer.className = 'ui-card-wrapper';
 
-        // --- 核心修改：使用 Canvas 代替 Img ---
-        // 1. 创建 Canvas
         const cardCanvas = createCardCanvas(c.name, 0);
-        cardCanvas.className = 'ui-card-img'; // 复用之前的 CSS 类名以保持样式
+        cardCanvas.className = 'ui-card-img';
 
-        // 2. 处理逆位旋转
         if (c.orientation === "逆位") {
             cardCanvas.style.transform = "rotate(180deg)";
         }
 
-        // 3. 将 Canvas 信息存入全局状态，以便在 animate 循环中更新
         STATE.uiResultCanvases.push({
             canvas: cardCanvas,
             ctx: cardCanvas.getContext('2d'),
@@ -164,11 +160,10 @@ function showResultPanel() {
 
         const label = document.createElement('div');
         label.className = 'ui-card-label';
-        // 简化名字显示
-        const simpleName = c.name.match(/\((.*?)\)/) ? c.name.match(/\((.*?)\)/)[1] : c.name;
-        label.innerText = `${simpleName} (${c.orientation})`;
+        // const simpleName = c.name.match(/\((.*?)\)/) ? c.name.match(/\((.*?)\)/)[1] : c.name;
+        label.innerText = `${c.name} (${c.orientation})`;
 
-        cardContainer.appendChild(cardCanvas); // 直接插入 Canvas
+        cardContainer.appendChild(cardCanvas);
         cardContainer.appendChild(label);
         ui.revealCont.appendChild(cardContainer);
     });
@@ -178,16 +173,21 @@ function showResultPanel() {
 
 function resetGame() {
     STATE.phase = 'intro';
+
     STATE.selectedCards.forEach(c => {
         scene.remove(c.mesh);
         if(c.mesh.children[2].material.map) c.mesh.children[2].material.map.dispose();
         if(c.mesh.children[2].material) c.mesh.children[2].material.dispose();
     });
+
     STATE.selectedCards = [];
+    STATE.uiResultCanvases = [];
     STATE.isPinching = false;
+    STATE.fistHoldStart = 0; // 重置握拳计时
 
     ui.result.style.opacity = 0;
     ui.result.style.pointerEvents = "none";
+    ui.progCont.style.display = 'none'; // 隐藏进度条
 
     ui.guide.style.opacity = 1;
     ui.guide.innerHTML = `<h2>洗牌仪式</h2><p>张开手掌，扰动能量</p>`;
@@ -196,7 +196,7 @@ function resetGame() {
 
     setTimeout(() => {
         STATE.phase = 'selecting';
-        ui.guide.innerHTML = `<h2>命运之选</h2><p>捏合手指选择 3 张卡牌</p>`;
+        ui.guide.innerHTML = `<h2>命运之选</h2><p>移动手掌浏览，捏合选择</p>`;
     }, 1500);
 }
 
@@ -205,40 +205,41 @@ function updatePhysics() {
     const time = Date.now() * 0.001;
     starField.rotation.y = time * 0.02;
 
-    // 1. 更新卡背 Shader 动画
     updateCardMaterials(time);
 
     if (STATE.cooldown > 0) STATE.cooldown -= 16;
 
-    // 2. 根据手势位置移动卡组 (视差效果)
     if (STATE.phase === 'selecting') {
-        const targetDeckPosX = -STATE.handPos.x * 75;
-        deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * 0.08;
+         // 手机端视差效果减弱
+         const parallaxStrength = isMobile ? 0.02 : 0.08;
+         const targetDeckPosX = -STATE.handPos.x * (isMobile ? 30 : 75);
 
-        const targetDeckRotY = -STATE.handPos.x * 2.0;
-        deckGroup.rotation.y += (targetDeckRotY - deckGroup.rotation.y) * 0.08;
+         deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * parallaxStrength;
+         deckGroup.rotation.y += (-STATE.handPos.x * (isMobile ? 1.0 : 2.0) - deckGroup.rotation.y) * parallaxStrength;
 
-        const targetDeckPosY = -STATE.handPos.y * 3;
-        deckGroup.position.y += (targetDeckPosY - deckGroup.position.y) * 0.1;
+         const targetDeckPosY = -STATE.handPos.y * (isMobile ? 1.5 : 3);
+         deckGroup.position.y += (targetDeckPosY - deckGroup.position.y) * 0.1;
 
-        deckGroup.rotation.z += (STATE.handPos.x * 0.1 - deckGroup.rotation.z) * 0.05;
+         deckGroup.rotation.z += (STATE.handPos.x * 0.1 - deckGroup.rotation.z) * 0.05;
     }
 
-    // 3. 准星控制
-    // 如果没有检测到手，隐藏准星
+    // 准星处理
     if (!STATE.handDetected) {
         reticle.visible = false;
-        pointLight.intensity = 0; // 同时也关掉准星上的灯光
-        return; // 停止后续交互检测
+        pointLight.intensity = 0;
+        return;
     } else {
         reticle.visible = true;
         pointLight.intensity = 1.2;
     }
 
-    const sensitivity = isMobile ? 3.0 : 2.5;
-    // 限制 NDC 坐标在 -1 到 1 之间
-    const ndcX = Math.max(-1, Math.min(1, STATE.handPos.x * sensitivity));
-    const ndcY = Math.max(-1, Math.min(1, STATE.handPos.y * sensitivity));
+    // 手机端灵敏度适配
+    const sensitivity = isMobile ? 1.5 : 2.5;
+
+    let ndcX = STATE.handPos.x * sensitivity;
+    let ndcY = STATE.handPos.y * sensitivity;
+    ndcX = Math.max(-0.95, Math.min(0.95, ndcX));
+    ndcY = Math.max(-0.95, Math.min(0.95, ndcY));
 
     const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
     vector.unproject(camera);
@@ -249,7 +250,6 @@ function updatePhysics() {
     pointLight.position.copy(reticle.position);
     pointLight.position.z += 1;
 
-    // 4. 射线检测
     raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
     const intersects = raycaster.intersectObjects(deckGroup.children, true);
 
@@ -280,7 +280,6 @@ function updatePhysics() {
             c.scale.setScalar(1.2);
             c.rotation.y = THREE.MathUtils.lerp(c.rotation.y, absoluteFaceCameraRot, 0.2);
 
-            // 捏合逻辑
             if (STATE.isPinching) {
                 if (STATE.pinchStartTime === 0) STATE.pinchStartTime = Date.now();
                 const elapsed = (Date.now() - STATE.pinchStartTime) / 1000;
@@ -289,13 +288,11 @@ function updatePhysics() {
                 ui.progCont.style.display = 'block';
                 ui.progress.style.width = `${progress * 100}%`;
 
-                // 准星反馈
                 reticleScale = 1.0 - (progress * 0.4);
                 reticleCoreScale = progress;
                 reticleRotSpeed = 5.0 + (progress * 10.0);
-                reticleColor = 0x00ffff;
+                reticleColor = 0xffaa00;
 
-                // 卡牌抖动效果
                 c.position.x = c.userData.originalPos.x + (Math.random()-0.5) * 0.05;
 
                 if (progress >= 1.0) confirmSelection(c);
@@ -307,7 +304,6 @@ function updatePhysics() {
             }
 
         } else {
-            // 未悬停状态恢复
             coreMesh.material.emissive.setHex(0x221100);
             coreMesh.material.emissiveIntensity = 0.2;
 
@@ -323,15 +319,13 @@ function updatePhysics() {
         }
     });
 
-    // 准星无悬停状态
-    if (!hoveredCard) {
+    if (!hoveredCard && !STATE.isResetting) { // 如果不是在重置中，才隐藏
         STATE.pinchStartTime = 0;
         ui.progCont.style.display = 'none';
         reticleScale = 1.0;
         reticleCoreScale = 0.0;
     }
 
-    // 更新准星视觉
     reticleOuter.scale.lerp(new THREE.Vector3(reticleScale, reticleScale, 1), 0.2);
     reticleCore.scale.lerp(new THREE.Vector3(reticleCoreScale, reticleCoreScale, 1), 0.2);
     reticleOuter.rotation.z -= time * 0.05 * reticleRotSpeed;
@@ -343,32 +337,48 @@ function updatePhysics() {
     }
 }
 
-// 握拳检测 (用于重置游戏)
+// --- 握拳检测 (核心修复) ---
 function isHandFist(landmarks) {
     const wrist = landmarks[0];
-    const tips = [8, 12, 16, 20];
+
+    // 我们检查四个主要手指：食指(8)、中指(12)、无名指(16)、小指(20)
+    // 对应的掌指关节(MCP)是：5, 9, 13, 17
+    const fingers = [
+        { tip: 8, mcp: 5 },
+        { tip: 12, mcp: 9 },
+        { tip: 16, mcp: 13 },
+        { tip: 20, mcp: 17 }
+    ];
+
     let foldedCount = 0;
-    tips.forEach(idx => {
-        const dist = Math.hypot(landmarks[idx].x - wrist.x, landmarks[idx].y - wrist.y);
-        if (dist < CONFIG.fistCompactness || landmarks[idx].y > landmarks[idx-2].y) foldedCount++;
+    fingers.forEach(f => {
+        // 计算指尖到手腕的距离
+        const tipDist = Math.hypot(landmarks[f.tip].x - wrist.x, landmarks[f.tip].y - wrist.y);
+        // 计算指根(MCP)到手腕的距离
+        const mcpDist = Math.hypot(landmarks[f.mcp].x - wrist.x, landmarks[f.mcp].y - wrist.y);
+
+        // 如果指尖距离手腕 比 指根距离手腕 更近，说明手指是弯曲的
+        if (tipDist < mcpDist) {
+            foldedCount++;
+        }
     });
+
+    // 只要有3个或以上的手指弯曲，就认为是握拳
     return foldedCount >= 3;
 }
 
 // --- MediaPipe 初始化 ---
 
 const videoElement = document.getElementById('input_video');
-videoElement.setAttribute('playsinline', 'true');
-videoElement.setAttribute('webkit-playsinline', 'true');
-videoElement.setAttribute('muted', 'true');
-// 隐藏视频元素，只用于识别
+videoElement.setAttribute('autoplay', '');
+videoElement.setAttribute('muted', '');
+videoElement.setAttribute('playsinline', '');
 videoElement.style.opacity = 0;
 videoElement.style.position = 'absolute';
 videoElement.style.zIndex = -1;
 
-// 确保 Hands 已加载 (来自 CDN)
 if (typeof Hands === 'undefined') {
-    console.error("MediaPipe Hands library not loaded. Check index.html imports.");
+    console.error("MediaPipe Hands library not loaded.");
     alert("系统错误：手势识别库未加载，请刷新页面。");
 }
 
@@ -376,7 +386,7 @@ const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@me
 
 hands.setOptions({
     maxNumHands: isMobile ? 1 : 2,
-    modelComplexity: isMobile ? 0 : 1, // 0:Lite (快), 1:Full (准)
+    modelComplexity: isMobile ? 0 : 1,
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
 });
@@ -386,37 +396,55 @@ hands.onResults((results) => {
         STATE.handDetected = true;
 
         const landmarks = results.multiHandLandmarks[0];
-        // 坐标映射：MediaPipe x(0~1) -> NDC x(-1~1)
-        // 注意：自拍模式下视频是镜像的，所以 x 需要翻转 (1 - x)
         const x = (1 - landmarks[9].x) * 2 - 1;
         const y = -(landmarks[9].y * 2 - 1);
 
-        // 平滑移动
-        STATE.handPos.x += (x - STATE.handPos.x) * 0.3; // 增加平滑系数，减少迟滞
-        STATE.handPos.y += (y - STATE.handPos.y) * 0.3;
+        const smoothFactor = isMobile ? 0.1 : 0.3;
+        STATE.handPos.x += (x - STATE.handPos.x) * smoothFactor;
+        STATE.handPos.y += (y - STATE.handPos.y) * smoothFactor;
 
-        // 捏合检测 (食指指尖 vs 拇指指尖)
+        // 捏合检测
         const dist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
-        // 根据实际测试，pinchDist 阈值通常在 0.05 左右
         STATE.isPinching = dist < (CONFIG.pinchDist || 0.05);
 
-        // 重置手势 (仅在结果页生效)
+        // --- 握拳重置逻辑修复 ---
         let isResetGesture = false;
+
+        // 只有在结果展示阶段才允许重置
         if (STATE.phase === 'result') {
-            if (isHandFist(landmarks)) isResetGesture = true;
+            if (isHandFist(landmarks)) {
+                isResetGesture = true;
+            }
         }
 
         if (isResetGesture) {
+            STATE.isResetting = true; // 标记正在重置，用于物理更新中的UI显示
             if (!STATE.fistHoldStart) STATE.fistHoldStart = Date.now();
-            if (Date.now() - STATE.fistHoldStart > 1500) {
+
+            // 计算长按进度
+            const elapsed = Date.now() - STATE.fistHoldStart;
+            const progress = Math.min(elapsed / 1500, 1.0); // 1.5秒触发
+
+            // 显示红色进度条反馈
+            ui.progCont.style.display = 'block';
+            ui.progress.style.backgroundColor = '#ff4444'; // 红色警告色
+            ui.progress.style.width = `${progress * 100}%`;
+
+            if (progress >= 1.0) {
                 resetGame();
                 STATE.fistHoldStart = 0;
+                STATE.isResetting = false;
             }
         } else {
             STATE.fistHoldStart = 0;
+            STATE.isResetting = false;
+            // 如果不在捏合也不在重置，隐藏进度条
+            if (!STATE.isPinching) {
+                ui.progCont.style.display = 'none';
+                ui.progress.style.width = '0%';
+            }
         }
 
-        // 状态流转
         if (STATE.phase === 'intro') {
             STATE.phase = 'selecting';
             ui.guide.innerHTML = `<h2>命运之选</h2><p>移动手掌浏览，捏合选择</p>`;
@@ -425,6 +453,8 @@ hands.onResults((results) => {
         STATE.handDetected = false;
         STATE.isPinching = false;
         STATE.fistHoldStart = 0;
+        STATE.isResetting = false;
+        ui.progCont.style.display = 'none';
     }
 });
 
@@ -443,17 +473,23 @@ ui.startBtn.addEventListener('click', () => {
     }
 
     ui.loader.style.display = 'none';
-    ui.startBtn.style.display = 'none'; // 点击后隐藏按钮
+    ui.startBtn.style.display = 'none';
 
     cameraUtils.start().then(() => {
         console.log("Camera started");
     }).catch(err => {
         console.error("摄像头启动失败:", err);
-        // 降级尝试
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+        navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'user',
+                width: { ideal: isMobile ? 480 : 1280 },
+                height: { ideal: isMobile ? 640 : 720 }
+            }
+        })
             .then(stream => {
                 videoElement.srcObject = stream;
-                videoElement.play();
+                videoElement.play().catch(e => console.error("Play failed", e));
+
                 const loop = async () => {
                     await hands.send({image: videoElement});
                     requestAnimationFrame(loop);
@@ -478,7 +514,7 @@ if (document.readyState === 'complete') {
     initSystem();
 } else {
     window.addEventListener('load', initSystem);
-    setTimeout(initSystem, 3000); // 超时强制显示
+    setTimeout(initSystem, 3000);
 }
 
 // --- 核心动画循环 ---
@@ -488,7 +524,6 @@ function animate() {
 
     updatePhysics();
 
-    // A. 更新 3D 场景中选中卡牌的材质动画 (特写/揭示阶段)
     if (STATE.phase === 'result' || STATE.phase === 'revealing') {
         STATE.selectedCards.forEach(c => {
             if (c.mesh && c.mesh.children[2]) {
@@ -498,8 +533,6 @@ function animate() {
         });
     }
 
-    // B. 更新 DOM 结果展示中的 Canvas 动画
-    // 这是让右侧/结果面板中的卡片动起来的关键
     if (STATE.phase === 'result' && STATE.uiResultCanvases.length > 0) {
         STATE.uiResultCanvases.forEach(item => {
             updateCanvasContent(item.ctx, item.canvas.width, item.canvas.height, item.name, time);
