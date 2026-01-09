@@ -14,7 +14,11 @@ const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
 // 扩展 STATE
 STATE.uiResultCanvases = [];
 
-// 动画函数 (保持不变)
+// 获取新增的 UI 元素
+const pcResetHint = document.getElementById('pc-reset-hint');
+const mobileResetBtn = document.getElementById('mobile-reset-btn');
+
+// --- 动画函数 (保持不变) ---
 function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     const startPos = obj.position.clone();
     const startRot = obj.rotation.clone();
@@ -41,10 +45,13 @@ function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     loop();
 }
 
-// 确认选择逻辑 (保持不变)
+// --- 确认选择逻辑 (保持不变) ---
 function confirmSelection(cardGroup) {
     if (STATE.selectedCards.length >= 3) return;
     if (STATE.selectedCards.find(c => c.mesh === cardGroup)) return;
+
+    // 播放选中音效或震动反馈 (可选)
+    if (navigator.vibrate) navigator.vibrate(50);
 
     STATE.cooldown = CONFIG.cooldownTime;
     STATE.isPinching = false;
@@ -73,9 +80,9 @@ function confirmSelection(cardGroup) {
 
     const slotIndex = STATE.selectedCards.length - 1;
     // 手机端展示位置微调
-    const spacing = isMobile ? 2.2 : 3.0;
+    const spacing = isMobile ? 1.8 : 3.0; // 手机端稍微紧凑一点
     const targetX = (slotIndex - 1) * spacing;
-    const targetY = isMobile ? -1.5 : -2.5;
+    const targetY = isMobile ? -1.0 : -2.5; // 手机端位置稍微抬高
     const targetZ = 9;
 
     cardGroup.children[0].material.emissive.setHex(0xffaa00);
@@ -84,7 +91,7 @@ function confirmSelection(cardGroup) {
     animateMove(cardGroup,
         {x: targetX, y: targetY, z: targetZ},
         {x: 0, y: 0, z: 0},
-        {x: 0.8, y: 0.8, z: 0.8},
+        {x: isMobile ? 0.6 : 0.8, y: isMobile ? 0.6 : 0.8, z: isMobile ? 0.6 : 0.8},
         600
     );
 
@@ -93,12 +100,17 @@ function confirmSelection(cardGroup) {
         cardGroup.children[0].material.emissiveIntensity = 0.2;
     }, 300);
 
+    // 更新UI提示
     if (STATE.selectedCards.length === 3) {
         STATE.phase = 'revealing';
         ui.guide.innerHTML = `<h2>命运已定</h2><p>准备揭晓...</p>`;
         setTimeout(revealCards, 1500);
     } else {
-        ui.guide.innerHTML = `<h2>已选 ${STATE.selectedCards.length}/3</h2><p>继续寻找共鸣</p>`;
+        if(isMobile) {
+            ui.guide.innerHTML = `<h2>已选 ${STATE.selectedCards.length}/3</h2><p>点击卡牌继续</p>`;
+        } else {
+            ui.guide.innerHTML = `<h2>已选 ${STATE.selectedCards.length}/3</h2><p>继续寻找共鸣</p>`;
+        }
     }
 }
 
@@ -113,7 +125,7 @@ function revealCards() {
             frontMesh.material = newMaterial;
             frontMesh.material.needsUpdate = true;
 
-            const spacing = isMobile ? 2.5 : 3.5;
+            const spacing = isMobile ? 2.2 : 3.5;
             const revealX = (index - 1) * spacing;
             const revealY = 0.5;
             const revealZ = 10;
@@ -124,7 +136,7 @@ function revealCards() {
             animateMove(c.mesh,
                 {x: revealX, y: revealY, z: revealZ},
                 {x: 0, y: targetRotY, z: targetRotZ},
-                {x: 0.6, y: 0.6, z: 0.6},
+                {x: isMobile ? 0.5 : 0.6, y: isMobile ? 0.5 : 0.6, z: isMobile ? 0.5 : 0.6},
                 1200
             );
 
@@ -140,6 +152,18 @@ function showResultPanel() {
     ui.aiText.innerHTML = "正在连接星灵...";
     ui.revealCont.innerHTML = "";
     STATE.uiResultCanvases = [];
+
+    // 根据设备显示不同的重置方式
+    if (isMobile) {
+        if(pcResetHint) pcResetHint.style.display = 'none';
+        if(mobileResetBtn) {
+            mobileResetBtn.style.display = 'block';
+            mobileResetBtn.onclick = resetGame; // 绑定点击事件
+        }
+    } else {
+        if(pcResetHint) pcResetHint.style.display = 'block';
+        if(mobileResetBtn) mobileResetBtn.style.display = 'none';
+    }
 
     STATE.selectedCards.forEach(c => {
         const cardContainer = document.createElement('div');
@@ -160,7 +184,6 @@ function showResultPanel() {
 
         const label = document.createElement('div');
         label.className = 'ui-card-label';
-        // const simpleName = c.name.match(/\((.*?)\)/) ? c.name.match(/\((.*?)\)/)[1] : c.name;
         label.innerText = `${c.name} (${c.orientation})`;
 
         cardContainer.appendChild(cardCanvas);
@@ -183,20 +206,31 @@ function resetGame() {
     STATE.selectedCards = [];
     STATE.uiResultCanvases = [];
     STATE.isPinching = false;
-    STATE.fistHoldStart = 0; // 重置握拳计时
+    STATE.fistHoldStart = 0;
 
     ui.result.style.opacity = 0;
     ui.result.style.pointerEvents = "none";
-    ui.progCont.style.display = 'none'; // 隐藏进度条
+    ui.progCont.style.display = 'none';
+
+    // 隐藏移动端按钮
+    if(mobileResetBtn) mobileResetBtn.style.display = 'none';
 
     ui.guide.style.opacity = 1;
-    ui.guide.innerHTML = `<h2>洗牌仪式</h2><p>张开手掌，扰动能量</p>`;
+    if(isMobile) {
+        ui.guide.innerHTML = `<h2>洗牌仪式</h2><p>滑动屏幕，扰动能量</p>`;
+    } else {
+        ui.guide.innerHTML = `<h2>洗牌仪式</h2><p>张开手掌，扰动能量</p>`;
+    }
 
     initDeck();
 
     setTimeout(() => {
         STATE.phase = 'selecting';
-        ui.guide.innerHTML = `<h2>命运之选</h2><p>移动手掌浏览，捏合选择</p>`;
+        if(isMobile) {
+            ui.guide.innerHTML = `<h2>命运之选</h2><p>左右滑动浏览，点击卡牌选择</p>`;
+        } else {
+            ui.guide.innerHTML = `<h2>命运之选</h2><p>移动手掌浏览，捏合选择</p>`;
+        }
     }, 1500);
 }
 
@@ -209,60 +243,76 @@ function updatePhysics() {
 
     if (STATE.cooldown > 0) STATE.cooldown -= 16;
 
+    // --- 视差与移动逻辑 (Parallax) ---
+    // 无论 PC 还是 Mobile，只要 handPos 有值 (Mobile 通过 Touch 更新)，就应用视差
     if (STATE.phase === 'selecting') {
-         // 手机端视差效果减弱
-         const parallaxStrength = isMobile ? 0.02 : 0.08;
-         const targetDeckPosX = -STATE.handPos.x * (isMobile ? 30 : 75);
+         const parallaxStrength = isMobile ? 0.05 : 0.08;
+         // Mobile 不需要那么夸张的移动范围
+         const rangeX = isMobile ? 40 : 75;
+
+         const targetDeckPosX = -STATE.handPos.x * rangeX;
 
          deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * parallaxStrength;
-         deckGroup.rotation.y += (-STATE.handPos.x * (isMobile ? 1.0 : 2.0) - deckGroup.rotation.y) * parallaxStrength;
+         deckGroup.rotation.y += (-STATE.handPos.x * (isMobile ? 0.5 : 2.0) - deckGroup.rotation.y) * parallaxStrength;
 
-         const targetDeckPosY = -STATE.handPos.y * (isMobile ? 1.5 : 3);
+         const targetDeckPosY = -STATE.handPos.y * (isMobile ? 1.0 : 3);
          deckGroup.position.y += (targetDeckPosY - deckGroup.position.y) * 0.1;
 
          deckGroup.rotation.z += (STATE.handPos.x * 0.1 - deckGroup.rotation.z) * 0.05;
     }
 
-    // 准星处理
-    if (!STATE.handDetected) {
-        reticle.visible = false;
-        pointLight.intensity = 0;
-        return;
+    // --- PC端：手势准星逻辑 ---
+    // 移动端：隐藏准星，因为是直接点击
+    if (!isMobile) {
+        if (!STATE.handDetected) {
+            reticle.visible = false;
+            pointLight.intensity = 0;
+            return;
+        } else {
+            reticle.visible = true;
+            pointLight.intensity = 1.2;
+        }
+
+        const sensitivityX = 2.5;
+        const sensitivityY = 2.5;
+
+        let ndcX = STATE.handPos.x * sensitivityX;
+        let ndcY = STATE.handPos.y * sensitivityY;
+        ndcX = Math.max(-0.98, Math.min(0.98, ndcX));
+        ndcY = Math.max(-0.98, Math.min(0.98, ndcY));
+
+        const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
+        vector.unproject(camera);
+        const dir = vector.sub(camera.position).normalize();
+        const targetPos = camera.position.clone().add(dir.multiplyScalar(10));
+        reticle.position.lerp(targetPos, 0.4);
+
+        pointLight.position.copy(reticle.position);
+        pointLight.position.z += 1;
+
+        // PC 射线检测 (实时 Hover)
+        raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
     } else {
-        reticle.visible = true;
-        pointLight.intensity = 1.2;
+        // Mobile: 隐藏准星
+        reticle.visible = false;
+        pointLight.intensity = 0.5; // 给一点环境光
     }
 
-    // --- 手机端灵敏度优化 ---
-    // 手机竖屏时，屏幕宽度较窄，需要更高的X轴灵敏度，让手指不用移动太大范围就能触达边缘
-    // Y轴通常可以保持相对较低或标准
-    const sensitivityX = isMobile ? 2.2 : 2.5;
-    const sensitivityY = isMobile ? 1.4 : 2.5;
-
-    let ndcX = STATE.handPos.x * sensitivityX;
-    let ndcY = STATE.handPos.y * sensitivityY;
-
-    // 限制在屏幕范围内
-    ndcX = Math.max(-0.98, Math.min(0.98, ndcX));
-    ndcY = Math.max(-0.98, Math.min(0.98, ndcY));
-
-    const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
-    vector.unproject(camera);
-    const dir = vector.sub(camera.position).normalize();
-    const targetPos = camera.position.clone().add(dir.multiplyScalar(10));
-    reticle.position.lerp(targetPos, 0.4);
-
-    pointLight.position.copy(reticle.position);
-    pointLight.position.z += 1;
-
-    raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
-    const intersects = raycaster.intersectObjects(deckGroup.children, true);
+    // --- 射线检测逻辑 (通用，但 Mobile 仅在点击时生效，这里主要处理 Hover 动画) ---
+    // Mobile 不需要 Hover 效果，或者用简单的滑动视差代替
+    // PC 需要处理 Hover + Pinch
 
     let hoveredCard = null;
-    if (intersects.length > 0 && STATE.phase === 'selecting' && STATE.cooldown <= 0) {
-        const hitObj = intersects[0].object;
-        if (hitObj.parent && hitObj.parent.userData.isCardGroup) {
-            hoveredCard = hitObj.parent;
+
+    // 只有 PC 端在 updatePhysics 里做射线检测来确定 Hover 状态
+    // 移动端的点击检测在 click 事件里单独做
+    if (!isMobile && STATE.phase === 'selecting' && STATE.cooldown <= 0) {
+        const intersects = raycaster.intersectObjects(deckGroup.children, true);
+        if (intersects.length > 0) {
+            const hitObj = intersects[0].object;
+            if (hitObj.parent && hitObj.parent.userData.isCardGroup) {
+                hoveredCard = hitObj.parent;
+            }
         }
     }
 
@@ -273,10 +323,9 @@ function updatePhysics() {
     let reticleColor = 0xffaa00;
 
     deckGroup.children.forEach(c => {
-        const isCurrentlyHovered = (c === hoveredCard);
-        const coreMesh = c.children[0];
-
-        if (isCurrentlyHovered) {
+        // PC端逻辑: Hover 变色 + 捏合进度
+        if (!isMobile && c === hoveredCard) {
+            const coreMesh = c.children[0];
             coreMesh.material.emissive.setHex(0x5544aa);
             coreMesh.material.emissiveIntensity = 0.8;
 
@@ -285,6 +334,7 @@ function updatePhysics() {
             c.scale.setScalar(1.2);
             c.rotation.y = THREE.MathUtils.lerp(c.rotation.y, absoluteFaceCameraRot, 0.2);
 
+            // 捏合逻辑 (仅 PC)
             if (STATE.isPinching) {
                 if (STATE.pinchStartTime === 0) STATE.pinchStartTime = Date.now();
                 const elapsed = (Date.now() - STATE.pinchStartTime) / 1000;
@@ -292,7 +342,7 @@ function updatePhysics() {
 
                 ui.progCont.style.display = 'block';
                 ui.progress.style.width = `${progress * 100}%`;
-                ui.progress.style.backgroundColor = '#ffffff'; // 捏合选择时为白色
+                ui.progress.style.backgroundColor = '#ffffff';
 
                 reticleScale = 1.0 - (progress * 0.4);
                 reticleCoreScale = progress;
@@ -308,8 +358,9 @@ function updatePhysics() {
                 ui.progress.style.width = '0%';
                 reticleScale = 1.3;
             }
-
         } else {
+            // 普通状态 (PC非Hover 或 Mobile所有卡)
+            const coreMesh = c.children[0];
             coreMesh.material.emissive.setHex(0x221100);
             coreMesh.material.emissiveIntensity = 0.2;
 
@@ -325,200 +376,239 @@ function updatePhysics() {
         }
     });
 
-    if (!hoveredCard && !STATE.isResetting) { // 如果不是在重置中，才隐藏
-        STATE.pinchStartTime = 0;
-        ui.progCont.style.display = 'none';
-        reticleScale = 1.0;
-        reticleCoreScale = 0.0;
-    }
+    if (!isMobile) {
+        if (!hoveredCard && !STATE.isResetting) {
+            STATE.pinchStartTime = 0;
+            ui.progCont.style.display = 'none';
+            reticleScale = 1.0;
+            reticleCoreScale = 0.0;
+        }
 
-    reticleOuter.scale.lerp(new THREE.Vector3(reticleScale, reticleScale, 1), 0.2);
-    reticleCore.scale.lerp(new THREE.Vector3(reticleCoreScale, reticleCoreScale, 1), 0.2);
-    reticleOuter.rotation.z -= time * 0.05 * reticleRotSpeed;
+        reticleOuter.scale.lerp(new THREE.Vector3(reticleScale, reticleScale, 1), 0.2);
+        reticleCore.scale.lerp(new THREE.Vector3(reticleCoreScale, reticleCoreScale, 1), 0.2);
+        reticleOuter.rotation.z -= time * 0.05 * reticleRotSpeed;
 
-    if (reticleOuter.material.color.getHex() !== reticleColor) {
-        reticleOuter.material.color.lerp(new THREE.Color(reticleColor), 0.1);
-    } else {
-        reticleOuter.material.color.setHex(0xffaa00);
+        if (reticleOuter.material.color.getHex() !== reticleColor) {
+            reticleOuter.material.color.lerp(new THREE.Color(reticleColor), 0.1);
+        } else {
+            reticleOuter.material.color.setHex(0xffaa00);
+        }
     }
 }
 
-// --- 握拳检测 ---
+
+// --- 握拳检测 (仅 PC 使用) ---
 function isHandFist(landmarks) {
     const wrist = landmarks[0];
-
-    // 我们检查四个主要手指：食指(8)、中指(12)、无名指(16)、小指(20)
-    // 对应的掌指关节(MCP)是：5, 9, 13, 17
     const fingers = [
         { tip: 8, mcp: 5 },
         { tip: 12, mcp: 9 },
         { tip: 16, mcp: 13 },
         { tip: 20, mcp: 17 }
     ];
-
     let foldedCount = 0;
     fingers.forEach(f => {
-        // 计算指尖到手腕的距离
         const tipDist = Math.hypot(landmarks[f.tip].x - wrist.x, landmarks[f.tip].y - wrist.y);
-        // 计算指根(MCP)到手腕的距离
         const mcpDist = Math.hypot(landmarks[f.mcp].x - wrist.x, landmarks[f.mcp].y - wrist.y);
-
-        // 如果指尖距离手腕 比 指根距离手腕 更近，说明手指是弯曲的
         if (tipDist < mcpDist) {
             foldedCount++;
         }
     });
-
-    // 只要有3个或以上的手指弯曲，就认为是握拳
     return foldedCount >= 3;
 }
 
-// --- MediaPipe 初始化 ---
+// --- 初始化系统 (区分 Mobile 和 Desktop) ---
 
 const videoElement = document.getElementById('input_video');
-videoElement.setAttribute('autoplay', '');
-videoElement.setAttribute('muted', '');
-videoElement.setAttribute('playsinline', '');
-videoElement.style.opacity = 0;
-videoElement.style.position = 'absolute';
-videoElement.style.zIndex = -1;
 
-if (typeof Hands === 'undefined') {
-    console.error("MediaPipe Hands library not loaded.");
-    alert("系统错误：手势识别库未加载，请刷新页面。");
+// 定义移动端触摸交互
+function initMobileInteraction() {
+    console.log("初始化移动端触控交互...");
+
+    // 1. 触摸滑动 -> 更新 Parallax (HandPos)
+    document.addEventListener('touchmove', (e) => {
+        if(e.touches.length > 0) {
+            const touch = e.touches[0];
+            // 将屏幕坐标映射到 -1 到 1
+            const x = (touch.clientX / window.innerWidth) * 2 - 1;
+            const y = -(touch.clientY / window.innerHeight) * 2 + 1;
+
+            // 平滑更新
+            STATE.handPos.x += (x - STATE.handPos.x) * 0.1;
+            STATE.handPos.y += (y - STATE.handPos.y) * 0.1;
+        }
+    }, { passive: true });
+
+    // 2. 点击 -> 射线检测选牌
+    renderer.domElement.addEventListener('click', (e) => {
+        if(STATE.phase !== 'selecting' || STATE.cooldown > 0) return;
+
+        // 计算点击位置的 NDC
+        const mouse = new THREE.Vector2();
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(deckGroup.children, true);
+
+        if (intersects.length > 0) {
+            const hitObj = intersects[0].object;
+            if (hitObj.parent && hitObj.parent.userData.isCardGroup) {
+                confirmSelection(hitObj.parent);
+            }
+        }
+    });
+
+    // 3. 标记系统状态
+    STATE.handDetected = true; // 移动端始终视为"已检测到手"以便逻辑运行，但关闭准星
+    STATE.phase = 'selecting';
+    ui.guide.innerHTML = `<h2>命运之选</h2><p>左右滑动浏览，点击卡牌选择</p>`;
+
+    // 隐藏加载动画
+    ui.loader.style.display = 'none';
+    ui.startBtn.style.display = 'none';
 }
 
-const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
 
-hands.setOptions({
-    maxNumHands: isMobile ? 1 : 2,
-    modelComplexity: isMobile ? 0 : 1,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-});
+// 定义桌面端 Camera + MediaPipe 初始化
+function initDesktopCamera() {
+    videoElement.setAttribute('autoplay', '');
+    videoElement.setAttribute('muted', '');
+    videoElement.setAttribute('playsinline', '');
+    videoElement.style.opacity = 0;
+    videoElement.style.position = 'absolute';
+    videoElement.style.zIndex = -1;
 
-hands.onResults((results) => {
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        STATE.handDetected = true;
-
-        const landmarks = results.multiHandLandmarks[0];
-        const x = (1 - landmarks[9].x) * 2 - 1;
-        const y = -(landmarks[9].y * 2 - 1);
-
-        const smoothFactor = isMobile ? 0.1 : 0.3;
-        STATE.handPos.x += (x - STATE.handPos.x) * smoothFactor;
-        STATE.handPos.y += (y - STATE.handPos.y) * smoothFactor;
-
-        // 捏合检测
-        const dist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
-        STATE.isPinching = dist < (CONFIG.pinchDist || 0.05);
-
-        // --- 握拳重置逻辑 ---
-        let isResetGesture = false;
-
-        // 限制：只有在结果展示阶段(result)才允许重置，禁止在 selecting 和 revealing 阶段重置
-        if (STATE.phase === 'result') {
-            if (isHandFist(landmarks)) {
-                isResetGesture = true;
-            }
-        }
-
-        if (isResetGesture) {
-            STATE.isResetting = true; // 标记正在重置，用于物理更新中的UI显示
-            if (!STATE.fistHoldStart) STATE.fistHoldStart = Date.now();
-
-            // 计算长按进度
-            const elapsed = Date.now() - STATE.fistHoldStart;
-            const progress = Math.min(elapsed / 1500, 1.0); // 1.5秒触发
-
-            // 核心修改：显示红色进度条反馈
-            ui.progCont.style.display = 'block';
-            ui.progress.style.backgroundColor = '#ff4444'; // 红色警告色
-            ui.progress.style.width = `${progress * 100}%`;
-
-            if (progress >= 1.0) {
-                resetGame();
-                STATE.fistHoldStart = 0;
-                STATE.isResetting = false;
-            }
-        } else {
-            STATE.fistHoldStart = 0;
-            STATE.isResetting = false;
-            // 如果不在捏合也不在重置，隐藏进度条
-            if (!STATE.isPinching) {
-                ui.progCont.style.display = 'none';
-                ui.progress.style.width = '0%';
-            }
-        }
-
-        if (STATE.phase === 'intro') {
-            STATE.phase = 'selecting';
-            ui.guide.innerHTML = `<h2>命运之选</h2><p>移动手掌浏览，捏合选择</p>`;
-        }
-    } else {
-        STATE.handDetected = false;
-        STATE.isPinching = false;
-        STATE.fistHoldStart = 0;
-        STATE.isResetting = false;
-        ui.progCont.style.display = 'none';
-    }
-});
-
-// Camera 初始化
-const cameraUtils = new Camera(videoElement, {
-  onFrame: async () => { await hands.send({image: videoElement}); },
-  width: isMobile ? 480 : 1280,
-  height: isMobile ? 640 : 720,
-  facingMode: 'user'
-});
-
-ui.startBtn.addEventListener('click', () => {
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        alert("安全警告：请在 HTTPS 环境下运行本应用，否则无法打开摄像头。");
+    if (typeof Hands === 'undefined') {
+        console.error("MediaPipe Hands library not loaded.");
+        alert("系统错误：手势识别库未加载，请刷新页面。");
         return;
     }
 
-    ui.loader.style.display = 'none';
-    ui.startBtn.style.display = 'none';
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+
+    hands.setOptions({
+        maxNumHands: 1, // PC 端通常单手操作
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+
+    hands.onResults((results) => {
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            STATE.handDetected = true;
+
+            const landmarks = results.multiHandLandmarks[0];
+            const x = (1 - landmarks[9].x) * 2 - 1;
+            const y = -(landmarks[9].y * 2 - 1);
+
+            const smoothFactor = 0.3;
+            STATE.handPos.x += (x - STATE.handPos.x) * smoothFactor;
+            STATE.handPos.y += (y - STATE.handPos.y) * smoothFactor;
+
+            // 捏合检测
+            const dist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
+            STATE.isPinching = dist < (CONFIG.pinchDist || 0.05);
+
+            // 握拳重置逻辑
+            let isResetGesture = false;
+            if (STATE.phase === 'result') {
+                if (isHandFist(landmarks)) {
+                    isResetGesture = true;
+                }
+            }
+
+            if (isResetGesture) {
+                STATE.isResetting = true;
+                if (!STATE.fistHoldStart) STATE.fistHoldStart = Date.now();
+                const elapsed = Date.now() - STATE.fistHoldStart;
+                const progress = Math.min(elapsed / 1500, 1.0);
+
+                ui.progCont.style.display = 'block';
+                ui.progress.style.backgroundColor = '#ff4444';
+                ui.progress.style.width = `${progress * 100}%`;
+
+                if (progress >= 1.0) {
+                    resetGame();
+                    STATE.fistHoldStart = 0;
+                    STATE.isResetting = false;
+                }
+            } else {
+                STATE.fistHoldStart = 0;
+                STATE.isResetting = false;
+                if (!STATE.isPinching) {
+                    ui.progCont.style.display = 'none';
+                    ui.progress.style.width = '0%';
+                }
+            }
+
+            if (STATE.phase === 'intro') {
+                STATE.phase = 'selecting';
+                ui.guide.innerHTML = `<h2>命运之选</h2><p>移动手掌浏览，捏合选择</p>`;
+            }
+        } else {
+            STATE.handDetected = false;
+            STATE.isPinching = false;
+            STATE.fistHoldStart = 0;
+            STATE.isResetting = false;
+            ui.progCont.style.display = 'none';
+        }
+    });
+
+    const cameraUtils = new Camera(videoElement, {
+        onFrame: async () => { await hands.send({image: videoElement}); },
+        width: 1280,
+        height: 720,
+        facingMode: 'user'
+    });
 
     cameraUtils.start().then(() => {
         console.log("Camera started");
     }).catch(err => {
         console.error("摄像头启动失败:", err);
-        navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'user',
-                width: { ideal: isMobile ? 480 : 1280 },
-                height: { ideal: isMobile ? 640 : 720 }
-            }
-        })
-            .then(stream => {
-                videoElement.srcObject = stream;
-                videoElement.play().catch(e => console.error("Play failed", e));
-
-                const loop = async () => {
-                    await hands.send({image: videoElement});
-                    requestAnimationFrame(loop);
-                };
-                loop();
-            })
-            .catch(e => {
-                alert(`无法访问摄像头，请检查权限设置。`);
-                ui.loader.style.display = 'flex';
-                ui.startBtn.style.display = 'block';
-            });
+        alert("无法访问摄像头，请检查权限。");
+        ui.loader.style.display = 'flex';
+        ui.startBtn.style.display = 'block';
     });
+}
+
+
+// --- 启动按钮逻辑 ---
+ui.startBtn.addEventListener('click', () => {
+    // 隐藏加载UI
+    ui.loader.style.display = 'none';
+    ui.startBtn.style.display = 'none';
+
+    if (isMobile) {
+        // 移动端：直接开始，不调用摄像头
+        initMobileInteraction();
+    } else {
+        // PC端：HTTPS检查 + 摄像头启动
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            alert("安全警告：请在 HTTPS 环境下运行本应用，否则无法打开摄像头。");
+            return;
+        }
+        initDesktopCamera();
+    }
 });
+
 
 const initSystem = () => {
     ui.spinner.style.display = 'none';
-    ui.loaderText.innerText = "系统就绪";
+    ui.loaderText.innerText = isMobile ? "点击开启命运" : "系统就绪";
     ui.startBtn.style.display = 'block';
+    ui.startBtn.innerText = isMobile ? "进入仪式" : "开启仪式";
 
-    // 核心修改：确保进度条在 UI 的最上层，覆盖 AI 结果面板
+    // 针对移动端的 UI 调整
+    if (isMobile) {
+        // 隐藏 PC 专属的帮助按钮或调整位置
+        const gestureHint = document.getElementById('gesture-hint');
+        if(gestureHint) gestureHint.style.display = 'none';
+    }
+
     if (ui.progCont) {
         ui.progCont.style.zIndex = "9999";
-        ui.progCont.style.position = "absolute"; // 确保定位有效
+        ui.progCont.style.position = "absolute";
     }
 };
 

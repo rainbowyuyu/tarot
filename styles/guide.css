@@ -147,3 +147,22 @@
 @keyframes pinch-thumb { 0%, 100% { transform: rotate(-30deg); } 50% { transform: rotate(-5deg); } }
 @keyframes pinch-index { 0%, 100% { transform: rotate(30deg); } 50% { transform: rotate(5deg); } }
 @keyframes pinch-ring { 0%, 100% { transform: scale(1.5); opacity: 0; border-style: dashed;} 50% { transform: scale(1); opacity: 1; border-style: solid; } }
+
+
+/* --- 在 guide.css 底部添加 --- */
+
+/* 移动端特定样式 */
+@media (max-width: 768px) {
+    /* 隐藏手势提示 */
+    #gesture-hint { display: none !important; }
+
+    /* 调整引导文字大小 */
+    #guide-overlay h2 { font-size: 1.5rem; }
+    #guide-overlay p { font-size: 1rem; }
+
+    /* 隐藏PC端的举手图标，因为不需要举手了 */
+    .gesture-icon { display: none; }
+
+    /* 调整结果面板内边距，防止内容溢出 */
+    #result-content { padding: 15px; }
+}

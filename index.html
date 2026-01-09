@@ -79,9 +79,16 @@
                 <h2 style="color:var(--primary); text-align:center; margin-bottom:30px;">命运指引</h2>
                 <div class="card-reveal" id="card-reveal-container"></div>
                 <div id="ai-text">正在连接宇宙意识</div>
-                <div style="text-align:center; margin-top:30px; font-size:12px; color:#555;">
+
+                <!-- 修改点：PC端显示握拳提示，移动端显示按钮 -->
+                <div id="pc-reset-hint" style="text-align:center; margin-top:30px; font-size:12px; color:#555;">
                     握拳 🤛 保持 1.5 秒 可重置仪式
                 </div>
+
+                <!-- 新增：移动端重置按钮 (默认隐藏) -->
+                <button id="mobile-reset-btn" class="btn-primary" style="display:none; margin: 20px auto; padding: 10px 30px;">
+                    重新开始
+                </button>
             </div>
         </div>
 
