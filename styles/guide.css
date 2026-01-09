@@ -1,20 +1,54 @@
+/* --- START OF FILE guide.css --- */
+
 /* --- 引导与交互提示样式 --- */
 
-/* 核心引导区 (举起右手提示) */
+/* 核心引导区 (PC默认样式) */
 #guide-overlay {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    text-align: center; pointer-events: auto; transition: opacity 0.5s; z-index: 10;
-    width: 100%; padding: 0 20px;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none; /* 关键：允许点击穿透，不阻挡选牌 */
+    transition: opacity 0.5s;
+    z-index: 10;
+    width: 100%;
+    padding: 0 20px;
 }
-.gesture-icon { font-size: 40px; margin-bottom: 10px; display: block; animation: float 2s infinite ease-in-out; }
-.instruction {
-    background: var(--glass); padding: 20px 40px;
-    border: 1px solid var(--primary); border-radius: 4px;
-    display: inline-block; max-width: 90%;
-}
-@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 
-/* 进度条 */
+.instruction {
+    background: var(--glass);
+    padding: 20px 40px;
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    display: inline-block;
+    max-width: 90%;
+    pointer-events: auto; /* 只有文字框可以交互(如果需要) */
+}
+
+/* 手机端特定适配：引导层上移，不要挡住中间的牌 */
+@media (max-width: 768px) {
+    #guide-overlay {
+        top: 20%; /* 上移 */
+        transform: translate(-50%, 0);
+    }
+    .instruction {
+        padding: 10px 20px;
+        background: rgba(0, 0, 0, 0.6); /* 减弱背景，增加通透感 */
+        border: none;
+    }
+    .instruction h2 {
+        font-size: 1.2rem;
+        margin-bottom: 5px;
+    }
+    .instruction p {
+        font-size: 0.9rem;
+        margin: 0;
+    }
+    /* 隐藏手机端不需要的手掌图标 */
+    .gesture-icon { display: none; }
+}
+
+/* 进度条 (仅PC捏合时显示) */
 #progress-container {
     position: absolute; top: 60%; left: 50%; transform: translateX(-50%);
     width: 200px; height: 4px; background: rgba(255,255,255,0.1); display: none;
@@ -22,7 +56,7 @@
 }
 #progress-bar { width: 0%; height: 100%; background: var(--primary); transition: width 0.1s linear; box-shadow: 0 0 10px var(--primary); }
 
-/* 右下角手势提示 (移动端隐藏，节省空间) */
+/* 右下角手势提示 (移动端隐藏) */
 #gesture-hint {
     position: absolute; bottom: 80px; right: 20px;
     text-align: right; font-size: 12px; opacity: 0.6; pointer-events: none;
@@ -32,10 +66,9 @@
 }
 
 /* --- 新手引导教程 (Tutorial) 样式 --- */
-
 .tutorial-container {
     width: 100%;
-    max-width: 500px; /* 桌面端最大宽度 */
+    max-width: 500px;
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -61,7 +94,6 @@
     border: 1px solid rgba(255,255,255,0.05);
 }
 
-/* 移动端减小演示区域高度 */
 @media (max-width: 480px), (max-height: 600px) {
     .demo-stage { height: 140px; margin-bottom: 15px; }
     .tutorial-container h3 { font-size: 16px; margin: 5px 0; }
@@ -69,51 +101,27 @@
 }
 
 /* 底部导航点 */
-.step-indicators {
-    display: flex; justify-content: center; gap: 8px; margin-bottom: 20px;
-}
-.dot {
-    width: 8px; height: 8px; background: #555; border-radius: 50%; transition: 0.3s;
-}
+.step-indicators { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
+.dot { width: 8px; height: 8px; background: #555; border-radius: 50%; transition: 0.3s; }
 .dot.active { background: var(--primary); transform: scale(1.2); }
 
-/* --- 控制区域布局 --- */
+/* 控制区域布局 */
 .tutorial-controls {
     display: flex; justify-content: space-between; align-items: center;
     width: 100%; margin-top: 10px; padding-top: 15px;
     border-top: 1px solid rgba(255,255,255,0.1);
 }
 
-/* 复选框样式 */
-.dont-show-label {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 13px; color: #aaa; cursor: pointer; user-select: none;
-}
-.dont-show-label input[type="checkbox"] {
-    accent-color: var(--primary); width: 14px; height: 14px;
-}
+.dont-show-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #aaa; cursor: pointer; user-select: none; }
+.dont-show-label input[type="checkbox"] { accent-color: var(--primary); width: 14px; height: 14px; }
 
-/* 按钮组 */
 .tut-btns { display: flex; gap: 10px; }
+.btn-secondary, .btn-primary { padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+.btn-secondary { background: transparent; border: 1px solid #555; color: #aaa; }
+.btn-primary { background: var(--primary); border: none; color: #000; font-weight: bold; box-shadow: 0 0 10px var(--primary-dim); }
 
-.btn-secondary, .btn-primary {
-    padding: 8px 16px; border-radius: 4px; cursor: pointer;
-    font-size: 13px; transition: all 0.2s;
-}
-
-.btn-secondary {
-    background: transparent; border: 1px solid #555; color: #aaa;
-}
-.btn-secondary:active { background: rgba(255,255,255,0.1); }
-
-.btn-primary {
-    background: var(--primary); border: none; color: #000; font-weight: bold;
-    box-shadow: 0 0 10px var(--primary-dim);
-}
-.btn-primary:active { transform: scale(0.95); }
-
-/* --- 纯 CSS 绘制动画 (保持原样，自动适配容器中心) --- */
-/* ... (距离、移动、捏合动画 CSS 保持不变，因为是绝对定位在 center) ... */
+/* --- 纯 CSS 绘制动画 --- */
+/* PC端动画保持不变 ... */
 .cam-icon { width: 40px; height: 30px; border: 2px solid #fff; border-radius: 4px; position: absolute; top: 25%; }
 .cam-icon::after { content:''; display:block; width:6px; height:6px; background:#fff; border-radius:50%; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
 
@@ -148,21 +156,32 @@
 @keyframes pinch-index { 0%, 100% { transform: rotate(30deg); } 50% { transform: rotate(5deg); } }
 @keyframes pinch-ring { 0%, 100% { transform: scale(1.5); opacity: 0; border-style: dashed;} 50% { transform: scale(1); opacity: 1; border-style: solid; } }
 
-
-/* --- 在 guide.css 底部添加 --- */
-
-/* 移动端特定样式 */
-@media (max-width: 768px) {
-    /* 隐藏手势提示 */
-    #gesture-hint { display: none !important; }
-
-    /* 调整引导文字大小 */
-    #guide-overlay h2 { font-size: 1.5rem; }
-    #guide-overlay p { font-size: 1rem; }
-
-    /* 隐藏PC端的举手图标，因为不需要举手了 */
-    .gesture-icon { display: none; }
-
-    /* 调整结果面板内边距，防止内容溢出 */
-    #result-content { padding: 15px; }
+/* --- 手机端手势 CSS 动画补充 (Swipe & Tap) --- */
+.mobile-swipe-hand {
+    width: 50px; height: 50px;
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zM17.84 14.86l-2.61-2.61c-.34-.34-.79-.53-1.27-.53h-.06l-1.9.38v-4.6c0-.55-.45-1-1-1s-1 .45-1 1v6.5h-1.5v-6.5c0-.55-.45-1-1-1s-1 .45-1 1v7c0 2.21 1.79 4 4 4 .92 0 1.77-.31 2.45-.83l4.89-3.82c.48-.37.48-1.09 0-1.47z"/></svg>') no-repeat center/contain;
+    position: absolute;
+    top: 60%; left: 50%;
+    animation: swipe-anim 2s infinite ease-in-out;
+    opacity: 0.8;
 }
+@keyframes swipe-anim {
+    0% { transform: translate(-30px, 0) rotate(-10deg); opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { transform: translate(30px, 0) rotate(10deg); opacity: 0; }
+}
+
+.mobile-tap-hand {
+    width: 40px; height: 40px;
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm1-8c-.55 0-1-.45-1-1V5c0-.55.45-1 1-1s1 .45 1 1v3c0 .55-.45 1-1 1z"/></svg>') no-repeat center/contain; /* 简化用一个手指图标或者原点 */
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    animation: tap-anim 1.5s infinite;
+}
+.tap-ring {
+    width: 40px; height: 40px; border: 2px solid var(--primary); border-radius: 50%;
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    animation: tap-ring-anim 1.5s infinite;
+}
+@keyframes tap-anim { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(0.9); } }
+@keyframes tap-ring-anim { 0% { width: 10px; height: 10px; opacity: 1; } 100% { width: 50px; height: 50px; opacity: 0; } }

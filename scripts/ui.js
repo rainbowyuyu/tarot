@@ -1,4 +1,9 @@
+// --- START OF FILE ui.js ---
+
 import { STATE } from './globals.js';
+
+// 获取 isMobile 状态 (简单的正则检查)
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
 export const ui = {
     // ... 原有的引用 ...
@@ -29,7 +34,6 @@ export const ui = {
     tutSkipBtn: document.getElementById('tut-skip'),
     tutCheckbox: document.getElementById('tut-checkbox'),
 
-    // 法律条款引用保持不变...
     privacyLink: document.getElementById('privacy-link'),
     tosLink: document.getElementById('tos-link'),
     privacyModal: document.getElementById('privacy-modal'),
@@ -48,19 +52,64 @@ ui.inputKey.addEventListener('change', (e) => {
 // --- 教程/帮助逻辑 ---
 
 let currentStep = 0;
-const totalSteps = ui.tutSteps.length;
-const TUTORIAL_SEEN_KEY = 'arcana_tutorial_seen_v2'; // 使用个新 Key 防止旧缓存干扰
+// 如果是移动端，只需要2步教程（滑动、点击），PC端需要3步（距离、光标、捏合）
+const totalSteps = isMobile ? 2 : 3;
+const TUTORIAL_SEEN_KEY = 'arcana_tutorial_seen_v2';
+
+// 动态修改手机端的教程内容
+function adjustTutorialForMobile() {
+    if (!isMobile) return;
+
+    // 隐藏第三个点 (因为手机端只有2步)
+    if(ui.tutDots[2]) ui.tutDots[2].style.display = 'none';
+
+    // 修改步骤1： 原 "距离" -> 改 "欢迎/滑动"
+    const step1 = document.querySelector('.tutorial-step[data-step="1"]');
+    if (step1) {
+        // 清空原有的PC动画
+        const stage = step1.querySelector('.demo-stage');
+        stage.innerHTML = '<div class="mobile-swipe-hand"></div>'; // CSS定义的滑动动画
+
+        step1.querySelector('h3').innerText = "1. 滑动浏览";
+        step1.querySelector('p').innerHTML = "左右滑动屏幕，浏览命运牌阵。<br>卡牌会随你的指尖流动。";
+    }
+
+    // 修改步骤2： 原 "控制光标" -> 改 "点击选择"
+    const step2 = document.querySelector('.tutorial-step[data-step="2"]');
+    if (step2) {
+        const stage = step2.querySelector('.demo-stage');
+        stage.innerHTML = '<div class="tap-ring"></div><div class="mobile-tap-hand"></div>'; // 点击动画
+
+        step2.querySelector('h3').innerText = "2. 点击选择";
+        step2.querySelector('p').innerHTML = "当心意确定时，<b>点击卡牌</b>。<br>即可选定并揭示命运。";
+    }
+
+    // 隐藏步骤3 (PC的捏合)
+    const step3 = document.querySelector('.tutorial-step[data-step="3"]');
+    if (step3) {
+        step3.remove(); // 直接从DOM移除
+    }
+}
+
+// 在初始化时立即调用
+adjustTutorialForMobile();
+
 
 // 更新教程视图
 function updateTutorial() {
+    const steps = document.querySelectorAll('.tutorial-step'); // 重新获取，因为可能移除了
+
     // 切换 Step 显示
-    ui.tutSteps.forEach((step, index) => {
+    steps.forEach((step, index) => {
         step.classList.toggle('active', index === currentStep);
     });
     // 切换 Dot 状态
     ui.tutDots.forEach((dot, index) => {
-        dot.classList.toggle('active', index === currentStep);
+        if(index < totalSteps) {
+            dot.classList.toggle('active', index === currentStep);
+        }
     });
+
     // 改变按钮文字
     if (currentStep === totalSteps - 1) {
         ui.tutNextBtn.textContent = "开始仪式";
@@ -85,80 +134,52 @@ ui.tutSkipBtn.addEventListener('click', () => {
     closeTutorial();
 });
 
-// 关闭教程并处理 "不再提示" 逻辑
 function closeTutorial() {
     ui.helpModal.style.display = 'none';
-
-    // 检查复选框状态
     if (ui.tutCheckbox.checked) {
-        // 如果勾选，标记为已读，下次不自动显示
         localStorage.setItem(TUTORIAL_SEEN_KEY, 'true');
     } else {
-        // 如果未勾选，清除标记，下次重新进入时还会自动显示
-        // 这允许用户“后悔”并重新启用引导
         localStorage.removeItem(TUTORIAL_SEEN_KEY);
     }
-
     currentStep = 0;
     updateTutorial();
 }
 
-// 手动点击顶部 "?" 按钮打开帮助
 ui.helpBtn.addEventListener('click', () => {
     currentStep = 0;
-
-    // 打开时，读取当前状态并同步给复选框
-    // 如果之前设置过“不再提示”，则复选框默认应该是勾选的
     const hasSeen = localStorage.getItem(TUTORIAL_SEEN_KEY);
     ui.tutCheckbox.checked = (hasSeen === 'true');
-
     updateTutorial();
     ui.helpModal.style.display = 'flex';
 });
 
 ui.closeHelp.addEventListener('click', () => ui.helpModal.style.display = 'none');
 
-// --- 关键修改：Start 按钮后的检查逻辑 ---
-
-// 1. 定义检查函数
 ui.checkAndShowTutorial = function() {
     const hasSeen = localStorage.getItem(TUTORIAL_SEEN_KEY);
-
-    // 只有当 localStorage 中没有标记为 "true" 时，才自动弹窗
     if (hasSeen !== 'true') {
-        // 设置一个延时，等待 Loader 动画消失后再弹出，体验更好
         setTimeout(() => {
             currentStep = 0;
-            // 自动弹出时，默认复选框是不勾选的，强迫用户主动确认“不再提示”
             ui.tutCheckbox.checked = false;
             updateTutorial();
             ui.helpModal.style.display = 'flex';
-        }, 800); // 800ms 延时，确保主界面加载动画已完成
+        }, 800);
     }
 };
 
-// 2. 将检查绑定到 Start 按钮的点击事件上
-// 当用户点击 Loading 页面的“点击开启仪式”时触发
 ui.startBtn.addEventListener('click', () => {
-    // 调用检查逻辑
     ui.checkAndShowTutorial();
 });
 
-
-// --- 设置逻辑 (保持不变) ---
 ui.settingsBtn.addEventListener('click', () => ui.settingsModal.style.display = 'flex');
 ui.closeSettings.addEventListener('click', () => ui.settingsModal.style.display = 'none');
-
-// --- 法律条款逻辑 (保持不变) ---
 ui.privacyLink.addEventListener('click', (e) => { e.preventDefault(); ui.privacyModal.style.display = 'flex'; });
 ui.closePrivacy.addEventListener('click', () => ui.privacyModal.style.display = 'none');
 ui.tosLink.addEventListener('click', (e) => { e.preventDefault(); ui.tosModal.style.display = 'flex'; });
 ui.closeTos.addEventListener('click', () => ui.tosModal.style.display = 'none');
 
-// 统一点击遮罩关闭
 window.addEventListener('click', (e) => {
     if (e.target === ui.settingsModal) ui.settingsModal.style.display = 'none';
     if (e.target === ui.privacyModal) ui.privacyModal.style.display = 'none';
     if (e.target === ui.tosModal) ui.tosModal.style.display = 'none';
-    // 注意：Help Modal 这里不自动关闭，避免误触，需要用户明确点击跳过/开始
 });

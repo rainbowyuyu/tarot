@@ -45,12 +45,12 @@ function animateMove(obj, pos, rot, scale = {x:1, y:1, z:1}, duration = 1000) {
     loop();
 }
 
-// --- 确认选择逻辑 (保持不变) ---
+// --- 确认选择逻辑 ---
 function confirmSelection(cardGroup) {
     if (STATE.selectedCards.length >= 3) return;
     if (STATE.selectedCards.find(c => c.mesh === cardGroup)) return;
 
-    // 播放选中音效或震动反馈 (可选)
+    // 触觉反馈
     if (navigator.vibrate) navigator.vibrate(50);
 
     STATE.cooldown = CONFIG.cooldownTime;
@@ -79,10 +79,10 @@ function confirmSelection(cardGroup) {
     cardGroup.rotation.copy(euler);
 
     const slotIndex = STATE.selectedCards.length - 1;
-    // 手机端展示位置微调
-    const spacing = isMobile ? 1.8 : 3.0; // 手机端稍微紧凑一点
+    // 手机端展示位置：稍微紧凑一点，位置稍微抬高以免被底部UI遮挡
+    const spacing = isMobile ? 1.8 : 3.0;
     const targetX = (slotIndex - 1) * spacing;
-    const targetY = isMobile ? -1.0 : -2.5; // 手机端位置稍微抬高
+    const targetY = isMobile ? -1.0 : -2.5;
     const targetZ = 9;
 
     cardGroup.children[0].material.emissive.setHex(0xffaa00);
@@ -191,6 +191,7 @@ function showResultPanel() {
         ui.revealCont.appendChild(cardContainer);
     });
 
+    // 核心AI功能保持不变
     fetchInterpretation();
 }
 
@@ -227,7 +228,7 @@ function resetGame() {
     setTimeout(() => {
         STATE.phase = 'selecting';
         if(isMobile) {
-            ui.guide.innerHTML = `<h2>命运之选</h2><p>左右滑动浏览，点击卡牌选择</p>`;
+            ui.guide.innerHTML = `<h2>命运之选</h2><p>左右滑动浏览，点击卡牌</p>`;
         } else {
             ui.guide.innerHTML = `<h2>命运之选</h2><p>移动手掌浏览，捏合选择</p>`;
         }
@@ -244,16 +245,16 @@ function updatePhysics() {
     if (STATE.cooldown > 0) STATE.cooldown -= 16;
 
     // --- 视差与移动逻辑 (Parallax) ---
-    // 无论 PC 还是 Mobile，只要 handPos 有值 (Mobile 通过 Touch 更新)，就应用视差
     if (STATE.phase === 'selecting') {
+         // 手机端稍微减弱一点视差力度，防止太晕
          const parallaxStrength = isMobile ? 0.05 : 0.08;
-         // Mobile 不需要那么夸张的移动范围
-         const rangeX = isMobile ? 40 : 75;
+         // 手机端滑动范围小，需要放大系数来保证能看到所有牌
+         const rangeX = isMobile ? 60 : 75;
 
          const targetDeckPosX = -STATE.handPos.x * rangeX;
 
          deckGroup.position.x += (targetDeckPosX - deckGroup.position.x) * parallaxStrength;
-         deckGroup.rotation.y += (-STATE.handPos.x * (isMobile ? 0.5 : 2.0) - deckGroup.rotation.y) * parallaxStrength;
+         deckGroup.rotation.y += (-STATE.handPos.x * (isMobile ? 0.8 : 2.0) - deckGroup.rotation.y) * parallaxStrength;
 
          const targetDeckPosY = -STATE.handPos.y * (isMobile ? 1.0 : 3);
          deckGroup.position.y += (targetDeckPosY - deckGroup.position.y) * 0.1;
@@ -262,7 +263,7 @@ function updatePhysics() {
     }
 
     // --- PC端：手势准星逻辑 ---
-    // 移动端：隐藏准星，因为是直接点击
+    // 移动端：隐藏准星
     if (!isMobile) {
         if (!STATE.handDetected) {
             reticle.visible = false;
@@ -295,17 +296,12 @@ function updatePhysics() {
     } else {
         // Mobile: 隐藏准星
         reticle.visible = false;
-        pointLight.intensity = 0.5; // 给一点环境光
+        pointLight.intensity = 0.5;
     }
-
-    // --- 射线检测逻辑 (通用，但 Mobile 仅在点击时生效，这里主要处理 Hover 动画) ---
-    // Mobile 不需要 Hover 效果，或者用简单的滑动视差代替
-    // PC 需要处理 Hover + Pinch
 
     let hoveredCard = null;
 
-    // 只有 PC 端在 updatePhysics 里做射线检测来确定 Hover 状态
-    // 移动端的点击检测在 click 事件里单独做
+    // 仅 PC 实时检测 Hover
     if (!isMobile && STATE.phase === 'selecting' && STATE.cooldown <= 0) {
         const intersects = raycaster.intersectObjects(deckGroup.children, true);
         if (intersects.length > 0) {
@@ -359,7 +355,7 @@ function updatePhysics() {
                 reticleScale = 1.3;
             }
         } else {
-            // 普通状态 (PC非Hover 或 Mobile所有卡)
+            // 普通状态
             const coreMesh = c.children[0];
             coreMesh.material.emissive.setHex(0x221100);
             coreMesh.material.emissiveIntensity = 0.2;
@@ -460,9 +456,9 @@ function initMobileInteraction() {
     });
 
     // 3. 标记系统状态
-    STATE.handDetected = true; // 移动端始终视为"已检测到手"以便逻辑运行，但关闭准星
+    STATE.handDetected = true; // 移动端始终视为"已检测到手"
     STATE.phase = 'selecting';
-    ui.guide.innerHTML = `<h2>命运之选</h2><p>左右滑动浏览，点击卡牌选择</p>`;
+    ui.guide.innerHTML = `<h2>命运之选</h2><p>左右滑动浏览，点击卡牌</p>`;
 
     // 隐藏加载动画
     ui.loader.style.display = 'none';
@@ -601,7 +597,6 @@ const initSystem = () => {
 
     // 针对移动端的 UI 调整
     if (isMobile) {
-        // 隐藏 PC 专属的帮助按钮或调整位置
         const gestureHint = document.getElementById('gesture-hint');
         if(gestureHint) gestureHint.style.display = 'none';
     }
