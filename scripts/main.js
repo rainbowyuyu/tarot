@@ -233,13 +233,18 @@ function updatePhysics() {
         pointLight.intensity = 1.2;
     }
 
-    // 手机端灵敏度适配
-    const sensitivity = isMobile ? 1.5 : 2.5;
+    // --- 手机端灵敏度优化 ---
+    // 手机竖屏时，屏幕宽度较窄，需要更高的X轴灵敏度，让手指不用移动太大范围就能触达边缘
+    // Y轴通常可以保持相对较低或标准
+    const sensitivityX = isMobile ? 2.2 : 2.5;
+    const sensitivityY = isMobile ? 1.4 : 2.5;
 
-    let ndcX = STATE.handPos.x * sensitivity;
-    let ndcY = STATE.handPos.y * sensitivity;
-    ndcX = Math.max(-0.95, Math.min(0.95, ndcX));
-    ndcY = Math.max(-0.95, Math.min(0.95, ndcY));
+    let ndcX = STATE.handPos.x * sensitivityX;
+    let ndcY = STATE.handPos.y * sensitivityY;
+
+    // 限制在屏幕范围内
+    ndcX = Math.max(-0.98, Math.min(0.98, ndcX));
+    ndcY = Math.max(-0.98, Math.min(0.98, ndcY));
 
     const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
     vector.unproject(camera);
@@ -287,6 +292,7 @@ function updatePhysics() {
 
                 ui.progCont.style.display = 'block';
                 ui.progress.style.width = `${progress * 100}%`;
+                ui.progress.style.backgroundColor = '#ffffff'; // 捏合选择时为白色
 
                 reticleScale = 1.0 - (progress * 0.4);
                 reticleCoreScale = progress;
@@ -337,7 +343,7 @@ function updatePhysics() {
     }
 }
 
-// --- 握拳检测 (核心修复) ---
+// --- 握拳检测 ---
 function isHandFist(landmarks) {
     const wrist = landmarks[0];
 
@@ -407,10 +413,10 @@ hands.onResults((results) => {
         const dist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
         STATE.isPinching = dist < (CONFIG.pinchDist || 0.05);
 
-        // --- 握拳重置逻辑修复 ---
+        // --- 握拳重置逻辑 ---
         let isResetGesture = false;
 
-        // 只有在结果展示阶段才允许重置
+        // 限制：只有在结果展示阶段(result)才允许重置，禁止在 selecting 和 revealing 阶段重置
         if (STATE.phase === 'result') {
             if (isHandFist(landmarks)) {
                 isResetGesture = true;
@@ -425,7 +431,7 @@ hands.onResults((results) => {
             const elapsed = Date.now() - STATE.fistHoldStart;
             const progress = Math.min(elapsed / 1500, 1.0); // 1.5秒触发
 
-            // 显示红色进度条反馈
+            // 核心修改：显示红色进度条反馈
             ui.progCont.style.display = 'block';
             ui.progress.style.backgroundColor = '#ff4444'; // 红色警告色
             ui.progress.style.width = `${progress * 100}%`;
@@ -508,6 +514,12 @@ const initSystem = () => {
     ui.spinner.style.display = 'none';
     ui.loaderText.innerText = "系统就绪";
     ui.startBtn.style.display = 'block';
+
+    // 核心修改：确保进度条在 UI 的最上层，覆盖 AI 结果面板
+    if (ui.progCont) {
+        ui.progCont.style.zIndex = "9999";
+        ui.progCont.style.position = "absolute"; // 确保定位有效
+    }
 };
 
 if (document.readyState === 'complete') {

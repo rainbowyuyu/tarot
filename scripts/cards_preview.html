@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarot Card Renderer Preview</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #1a1a1a;
+            color: #ccc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 左侧控制面板 */
+        .sidebar {
+            width: 300px;
+            background: #222;
+            border-right: 1px solid #444;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        h2 { margin: 0 0 10px 0; color: #d4af37; font-size: 1.2rem; }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label { font-size: 0.8rem; color: #888; }
+
+        select, input[type="range"] {
+            width: 100%;
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        button {
+            background: #d4af37;
+            border: none;
+            padding: 8px;
+            color: #1a1a1a;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover { background: #e5c048; }
+
+        .info {
+            margin-top: auto;
+            font-size: 0.75rem;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        /* 右侧画布区域 */
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image:
+                linear-gradient(45deg, #111 25%, transparent 25%),
+                linear-gradient(-45deg, #111 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #111 75%),
+                linear-gradient(-45deg, transparent 75%, #111 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            position: relative;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        canvas {
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            background: #000;
+            max-height: 90vh;
+            border: 1px solid #333;
+        }
+
+        #timeDisplay { float: right; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>🔮 卡牌调试台</h2>
+
+        <div class="control-group">
+            <label>选择卡牌 (Current Card)</label>
+            <!-- 这里的选项将由 JS 动态填充 -->
+            <select id="cardSelector">
+                <option disabled>Loading...</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>时间流速 (Time Speed) <span id="speedDisplay">1.0x</span></label>
+            <input type="range" id="speedRange" min="0" max="5" step="0.1" value="1">
+        </div>
+
+        <div class="control-group">
+            <label>手动时间轴 (Scrubber) <span id="timeDisplay">0.00</span></label>
+            <input type="range" id="timeScrubber" min="0" max="100" step="0.01" value="0">
+        </div>
+
+        <div class="control-group">
+            <label>控制</label>
+            <div style="display:flex; gap:10px;">
+                <button id="btnPause">暂停</button>
+                <button id="btnReset">重置时间</button>
+            </div>
+        </div>
+
+        <div class="info">
+            <p>Canvas Size: 512 x 1024</p>
+            <p>通过 cardRegistry 动态加载。</p>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="previewCanvas" width="512" height="1024"></canvas>
+    </div>
+
+    <script type="module">
+        // ---------------------------------------------------------
+        // 1. 导入部分
+        // 直接从 Registry 导入所有数据
+        // ---------------------------------------------------------
+
+        import { REGISTRY } from './cardRegistry.js';
+
+        // ---------------------------------------------------------
+        // 2. 核心逻辑
+        // ---------------------------------------------------------
+
+        const canvas = document.getElementById('previewCanvas');
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // UI 元素
+        const selector = document.getElementById('cardSelector');
+        const speedRange = document.getElementById('speedRange');
+        const speedDisplay = document.getElementById('speedDisplay');
+        const timeScrubber = document.getElementById('timeScrubber');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const btnPause = document.getElementById('btnPause');
+        const btnReset = document.getElementById('btnReset');
+
+        // --- 初始化：动态填充下拉菜单 ---
+        function initDropdown() {
+            selector.innerHTML = ''; // 清空现有选项
+
+            const keys = Object.keys(REGISTRY);
+
+            if (keys.length === 0) {
+                const opt = document.createElement('option');
+                opt.text = "Registry is empty";
+                selector.add(opt);
+                return;
+            }
+
+            keys.forEach((key, index) => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.innerText = key;
+                selector.appendChild(opt);
+            });
+
+            // 默认选中第一个
+            state.cardKey = keys[0];
+            selector.value = keys[0];
+        }
+
+        // 状态
+        let state = {
+            cardKey: '', // 将在 initDropdown 中设置
+            time: 0,
+            speed: 1.0,
+            paused: false,
+            manualScrub: false
+        };
+
+        // 执行初始化
+        initDropdown();
+
+        // 事件监听
+        selector.addEventListener('change', (e) => {
+            state.cardKey = e.target.value;
+            // 切换卡牌时，如果卡牌需要重置动画，可以在这里重置时间
+            // state.time = 0;
+        });
+
+        speedRange.addEventListener('input', (e) => {
+            state.speed = parseFloat(e.target.value);
+            speedDisplay.innerText = state.speed.toFixed(1) + 'x';
+        });
+
+        timeScrubber.addEventListener('mousedown', () => { state.manualScrub = true; state.paused = true; });
+        timeScrubber.addEventListener('mouseup', () => { state.manualScrub = false; if(btnPause.innerText === '暂停') state.paused = false; });
+        timeScrubber.addEventListener('input', (e) => {
+            state.time = parseFloat(e.target.value);
+            drawFrame();
+        });
+
+        btnPause.addEventListener('click', () => {
+            state.paused = !state.paused;
+            btnPause.innerText = state.paused ? "播放" : "暂停";
+        });
+
+        btnReset.addEventListener('click', () => {
+            state.time = 0;
+            drawFrame();
+        });
+
+        // 动画循环
+        let lastTime = performance.now();
+
+        function loop(now) {
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            if (!state.paused && !state.manualScrub) {
+                state.time += dt * state.speed;
+                // 更新进度条 UI
+                timeScrubber.value = (state.time % 100).toFixed(2);
+            }
+
+            timeDisplay.innerText = state.time.toFixed(2);
+
+            drawFrame();
+            requestAnimationFrame(loop);
+        }
+
+        function drawFrame() {
+            // 1. 清空
+            ctx.clearRect(0, 0, width, height);
+
+            // 2. 获取当前绘图函数
+            const drawFn = REGISTRY[state.cardKey];
+
+            if (drawFn) {
+                try {
+                    // 3. 执行绘制
+                    drawFn(ctx, width, height, state.time);
+                } catch (err) {
+                    console.error("绘制错误:", err);
+                    ctx.fillStyle = "red";
+                    ctx.font = "20px sans-serif";
+                    ctx.fillText("Error: " + err.message, 20, 50);
+
+                    // 打印堆栈以便调试
+                    console.log(err.stack);
+                }
+            } else {
+                ctx.fillStyle = "#333";
+                ctx.textAlign = "center";
+                ctx.fillText("Select a card to preview", width/2, height/2);
+            }
+        }
+
+        // 启动
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>

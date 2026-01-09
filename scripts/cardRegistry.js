@@ -100,6 +100,10 @@ const REGISTRY = {
 };
 
 
+
+// --- 修改点：导出 REGISTRY 供预览页使用 ---
+export { REGISTRY };
+
 export function getDrawer(cardName) {
     // 尝试精确匹配
     if (REGISTRY[cardName]) return REGISTRY[cardName];
