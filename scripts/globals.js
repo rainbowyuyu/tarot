@@ -5,7 +5,7 @@ export const CONFIG = {
     cardHeight: 4.6,
     selectionThreshold: 0.5, // 捏合确认时间 (秒)
     cooldownTime: 1000,      // 冷却时间 (毫秒)
-    deckRadius: 30,          // 牌组半径
+    deckRadius: 32,          // 牌组半径
     cameraSensX: 0.08,
     cameraSensY: 0.03,
     pinchDist: 0.06,         // 捏合触发阈值 (归一化距离)

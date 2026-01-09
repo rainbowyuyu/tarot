@@ -37,8 +37,13 @@ export function initDeck() {
 
     // --- 适配修复 2: 调整布局参数 ---
     // 手机端：半径减小，角度跨度减小，使卡牌在竖屏中间更聚拢
-    const currentRadius = isMobile ? CONFIG.deckRadius * 0.6 : CONFIG.deckRadius;
-    const currentAngleStep = isMobile ? 0.15 : 0.20;
+    const currentRadius = isMobile ? CONFIG.deckRadius * 0.8 : CONFIG.deckRadius;
+    const currentAngleStep = isMobile ? 0.10 : 0.15;
+
+    // --- 新增：Z轴偏移量，让牌更靠近摄像机 ---
+    // 摄像机通常在 z=10~15 左右，原点在 z=0。
+    // 设置为 2.0 可以显著拉近距离，使卡牌细节更清晰
+    const deckZOffset = isMobile ? 4.0 : 1.0;
 
     for (let i = 0; i < totalCards; i++) {
         const group = new THREE.Group();
@@ -65,7 +70,8 @@ export function initDeck() {
         group.position.set(
             Math.sin(angle) * currentRadius,
             Math.cos(angle * 2) * 0.5 - 0.5,
-            Math.cos(angle) * currentRadius - currentRadius
+            // 修改处：在原有的弧形计算基础上，增加 deckZOffset
+            Math.cos(angle) * currentRadius - currentRadius + deckZOffset
         );
 
         // 手机端稍微增加一点Y轴倾斜，让原本太宽的排列看起来更像一个拱形

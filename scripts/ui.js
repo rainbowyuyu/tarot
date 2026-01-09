@@ -2,11 +2,11 @@
 
 import { STATE } from './globals.js';
 
-// 获取 isMobile 状态 (简单的正则检查)
+// 获取 isMobile 状态
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
 export const ui = {
-    // ... 原有的引用 ...
+    // ... (保留原有的引用不变) ...
     guide: document.getElementById('guide-content'),
     progress: document.getElementById('progress-bar'),
     progCont: document.getElementById('progress-container'),
@@ -27,7 +27,6 @@ export const ui = {
     settingsModal: document.getElementById('settings-modal'),
     closeSettings: document.getElementById('close-settings'),
 
-    // --- 教程相关引用 (新增 checkbox) ---
     tutSteps: document.querySelectorAll('.tutorial-step'),
     tutDots: document.querySelectorAll('.dot'),
     tutNextBtn: document.getElementById('tut-next'),
@@ -52,42 +51,50 @@ ui.inputKey.addEventListener('change', (e) => {
 // --- 教程/帮助逻辑 ---
 
 let currentStep = 0;
-// 如果是移动端，只需要2步教程（滑动、点击），PC端需要3步（距离、光标、捏合）
 const totalSteps = isMobile ? 2 : 3;
 const TUTORIAL_SEEN_KEY = 'arcana_tutorial_seen_v2';
 
-// 动态修改手机端的教程内容
+// --- 核心修改：针对移动端优化教程内容 ---
 function adjustTutorialForMobile() {
     if (!isMobile) return;
 
-    // 隐藏第三个点 (因为手机端只有2步)
+    // 隐藏第三个导航点 (因为手机端只有2步)
     if(ui.tutDots[2]) ui.tutDots[2].style.display = 'none';
 
-    // 修改步骤1： 原 "距离" -> 改 "欢迎/滑动"
+    // --- 修改步骤 1: 触控操作教学 ---
     const step1 = document.querySelector('.tutorial-step[data-step="1"]');
     if (step1) {
-        // 清空原有的PC动画
         const stage = step1.querySelector('.demo-stage');
-        stage.innerHTML = '<div class="mobile-swipe-hand"></div>'; // CSS定义的滑动动画
+        // 组合动画：先滑动，后点击
+        stage.innerHTML = `
+            <div class="mobile-swipe-hand" style="top:50%"></div>
+            <div class="tap-ring" style="top:50%; animation-delay:1s"></div>
+        `;
 
-        step1.querySelector('h3').innerText = "1. 滑动浏览";
-        step1.querySelector('p').innerHTML = "左右滑动屏幕，浏览命运牌阵。<br>卡牌会随你的指尖流动。";
+        step1.querySelector('h3').innerText = "1. 触控体验 (非完整版)";
+        step1.querySelector('p').innerHTML = "左右滑动浏览，点击卡牌选择。<br><span style='color:#aaa; font-size:12px'>手机端不支持手势识别，仅为触屏演示。</span>";
     }
 
-    // 修改步骤2： 原 "控制光标" -> 改 "点击选择"
+    // --- 修改步骤 2: PC端引流 ---
     const step2 = document.querySelector('.tutorial-step[data-step="2"]');
     if (step2) {
         const stage = step2.querySelector('.demo-stage');
-        stage.innerHTML = '<div class="tap-ring"></div><div class="mobile-tap-hand"></div>'; // 点击动画
+        // 插入纯CSS绘制的电脑图标
+        stage.innerHTML = `
+            <div class="pc-monitor">
+                <div class="screen-content"></div>
+                <div class="cam-dot"></div>
+            </div>
+        `;
 
-        step2.querySelector('h3').innerText = "2. 点击选择";
-        step2.querySelector('p').innerHTML = "当心意确定时，<b>点击卡牌</b>。<br>即可选定并揭示命运。";
+        step2.querySelector('h3').innerText = "2. 完整仪式请用电脑";
+        step2.querySelector('p').innerHTML = "<b>Arcana Gestura</b> 核心在于手势交互。<br>请使用 <b style='color:var(--primary)'>PC浏览器 + 摄像头</b><br>体验真实的隔空御物魔法。";
     }
 
-    // 隐藏步骤3 (PC的捏合)
+    // 移除步骤 3
     const step3 = document.querySelector('.tutorial-step[data-step="3"]');
     if (step3) {
-        step3.remove(); // 直接从DOM移除
+        step3.remove();
     }
 }
 
@@ -95,41 +102,36 @@ function adjustTutorialForMobile() {
 adjustTutorialForMobile();
 
 
-// 更新教程视图
+// 更新教程视图 (保持不变)
 function updateTutorial() {
-    const steps = document.querySelectorAll('.tutorial-step'); // 重新获取，因为可能移除了
+    const steps = document.querySelectorAll('.tutorial-step');
 
-    // 切换 Step 显示
     steps.forEach((step, index) => {
         step.classList.toggle('active', index === currentStep);
     });
-    // 切换 Dot 状态
+
     ui.tutDots.forEach((dot, index) => {
         if(index < totalSteps) {
             dot.classList.toggle('active', index === currentStep);
         }
     });
 
-    // 改变按钮文字
     if (currentStep === totalSteps - 1) {
-        ui.tutNextBtn.textContent = "开始仪式";
+        ui.tutNextBtn.textContent = "开始体验"; // 手机端改为“开始体验”
     } else {
         ui.tutNextBtn.textContent = "下一步";
     }
 }
 
-// 下一步按钮点击
 ui.tutNextBtn.addEventListener('click', () => {
     if (currentStep < totalSteps - 1) {
         currentStep++;
         updateTutorial();
     } else {
-        // 完成教程
         closeTutorial();
     }
 });
 
-// 跳过按钮点击
 ui.tutSkipBtn.addEventListener('click', () => {
     closeTutorial();
 });
@@ -171,6 +173,7 @@ ui.startBtn.addEventListener('click', () => {
     ui.checkAndShowTutorial();
 });
 
+// 其他事件监听保持不变...
 ui.settingsBtn.addEventListener('click', () => ui.settingsModal.style.display = 'flex');
 ui.closeSettings.addEventListener('click', () => ui.settingsModal.style.display = 'none');
 ui.privacyLink.addEventListener('click', (e) => { e.preventDefault(); ui.privacyModal.style.display = 'flex'; });
